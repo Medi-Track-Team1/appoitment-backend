@@ -3,9 +3,12 @@ package meditrack.service;
 
 import meditrack.dto.AppointmentDTO;
 import meditrack.dto.StatsDTO;
+import org.springframework.stereotype.Service;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Service
 public interface AppointmentService {
     AppointmentDTO createAppointment(AppointmentDTO appointmentDTO);
     AppointmentDTO getAppointmentById(String id);
