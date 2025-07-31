@@ -12,8 +12,4 @@ public class MediTrackAppointmentApplication {
         SpringApplication.run(MediTrackAppointmentApplication.class, args);
     }
 
-    @Bean
-    public ModelMapper modelMapper() {
-        return new ModelMapper();
-    }
 }
