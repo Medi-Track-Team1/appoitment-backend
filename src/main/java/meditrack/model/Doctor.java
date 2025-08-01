@@ -5,10 +5,11 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.util.List;
 
 @Document(collection = "doctors")
-
 public class Doctor {
     @Id
-    private String id;
+    private String id; // MongoDB ObjectId
+
+    private String doctorId; // Custom ID like DOC-1001
     private String fullName;
     private String specialization;
     private List<String> qualifications;
@@ -18,12 +19,21 @@ public class Doctor {
     private List<String> availableDays;
     private String workingHours;
 
+    // Getters and Setters
     public String getId() {
         return id;
     }
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getDoctorId() {
+        return doctorId;
+    }
+
+    public void setDoctorId(String doctorId) {
+        this.doctorId = doctorId;
     }
 
     public String getFullName() {

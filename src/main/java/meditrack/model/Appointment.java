@@ -1,33 +1,77 @@
 package meditrack.model;
 
-
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.time.LocalDateTime;
 
 @Document(collection = "appointments")
-
 public class Appointment {
+
     @Id
     private String id;
 
-    @DBRef
-    private Patient patient;
+    // References to Patient and Doctor by ID
+    private String patientId;
+    private String doctorId;
+    private String appointmentId;
 
-    @DBRef
-    private Doctor doctor;
-
+    // Additional details (flattened for easier access and email handling)
+    private String patientName;
+    private String doctorName;
     private String department;
+    private String patientEmail;
+
     private LocalDateTime appointmentDateTime;
-    private Integer duration; // in minutes
+    private Integer duration;
     private String reason;
     private String symptoms;
     private String additionalNotes;
-    private boolean isEmergency;
-    private String status; // PENDING, CONFIRMED, COMPLETED, CANCELLED, RESCHEDULED
+//    private boolean isEmergency;
+    private String status;
 
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
+    // Constructors
+
+    public Appointment() {
+    }
+
+    public Appointment(String id, String patientId, String doctorId, String appointmentId, String patientName, String doctorName,
+                       String department, String patientEmail, LocalDateTime appointmentDateTime, Integer duration,
+                       String reason, String symptoms, String additionalNotes, boolean isEmergency, String status,
+                       LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this.id = id;
+        this.patientId = patientId;
+        this.doctorId = doctorId;
+        this.appointmentId = appointmentId;
+        this.patientName = patientName;
+        this.doctorName = doctorName;
+        this.department = department;
+        this.patientEmail = patientEmail;
+        this.appointmentDateTime = appointmentDateTime;
+        this.duration = duration;
+        this.reason = reason;
+        this.symptoms = symptoms;
+        this.additionalNotes = additionalNotes;
+//        this.isEmergency = isEmergency;
+        this.status = status;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
+    // Getters and Setters
+
+
+    public String getAppointmentId() {
+        return appointmentId;
+    }
+
+    public void setAppointmentId(String appointmentId) {
+        this.appointmentId = appointmentId;
+    }
+
 
     public String getId() {
         return id;
@@ -37,20 +81,36 @@ public class Appointment {
         this.id = id;
     }
 
-    public Patient getPatient() {
-        return patient;
+    public String getPatientId() {
+        return patientId;
     }
 
-    public void setPatient(Patient patient) {
-        this.patient = patient;
+    public void setPatientId(String patientId) {
+        this.patientId = patientId;
     }
 
-    public Doctor getDoctor() {
-        return doctor;
+    public String getDoctorId() {
+        return doctorId;
     }
 
-    public void setDoctor(Doctor doctor) {
-        this.doctor = doctor;
+    public void setDoctorId(String doctorId) {
+        this.doctorId = doctorId;
+    }
+
+    public String getPatientName() {
+        return patientName;
+    }
+
+    public void setPatientName(String patientName) {
+        this.patientName = patientName;
+    }
+
+    public String getDoctorName() {
+        return doctorName;
+    }
+
+    public void setDoctorName(String doctorName) {
+        this.doctorName = doctorName;
     }
 
     public String getDepartment() {
@@ -59,6 +119,14 @@ public class Appointment {
 
     public void setDepartment(String department) {
         this.department = department;
+    }
+
+    public String getPatientEmail() {
+        return patientEmail;
+    }
+
+    public void setPatientEmail(String patientEmail) {
+        this.patientEmail = patientEmail;
     }
 
     public LocalDateTime getAppointmentDateTime() {
@@ -101,13 +169,13 @@ public class Appointment {
         this.additionalNotes = additionalNotes;
     }
 
-    public boolean isEmergency() {
-        return isEmergency;
-    }
-
-    public void setEmergency(boolean emergency) {
-        isEmergency = emergency;
-    }
+//    public boolean isEmergency() {
+//        return isEmergency;
+//    }
+//
+//    public void setEmergency(boolean emergency) {
+//        isEmergency = emergency;
+//    }
 
     public String getStatus() {
         return status;
@@ -133,5 +201,5 @@ public class Appointment {
         this.updatedAt = updatedAt;
     }
 
-    private LocalDateTime updatedAt;
+
 }

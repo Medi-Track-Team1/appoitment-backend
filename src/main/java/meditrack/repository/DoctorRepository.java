@@ -1,11 +1,11 @@
 package meditrack.repository;
 
-
 import meditrack.model.Doctor;
 import org.springframework.data.mongodb.repository.MongoRepository;
-import java.util.List;
+import java.util.Optional;
 
 public interface DoctorRepository extends MongoRepository<Doctor, String> {
-    Doctor findByEmail(String email);
-    List<Doctor> findByDepartment(String department);
+    Optional<Doctor> findByDoctorId(String doctorId);
+    boolean existsByDoctorId(String doctorId);
+// Add this line
 }
