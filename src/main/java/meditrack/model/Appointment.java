@@ -16,8 +16,10 @@ public class Appointment {
     private String doctorId;
     private String appointmentId;
 
-    // Additional details (flattened for easier access and email handling)
+    // Additional details
     private String patientName;
+    private int age;
+    private String phoneNumber;
     private String doctorName;
     private String department;
     private String patientEmail;
@@ -27,26 +29,25 @@ public class Appointment {
     private String reason;
     private String symptoms;
     private String additionalNotes;
-//    private boolean isEmergency;
     private String status;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // Constructors
-
     public Appointment() {
     }
 
-    public Appointment(String id, String patientId, String doctorId, String appointmentId, String patientName, String doctorName,
-                       String department, String patientEmail, LocalDateTime appointmentDateTime, Integer duration,
-                       String reason, String symptoms, String additionalNotes, boolean isEmergency, String status,
+    public Appointment(String id, String patientId, String doctorId, String appointmentId, String patientName, int age, String phoneNumber,
+                       String doctorName, String department, String patientEmail, LocalDateTime appointmentDateTime,
+                       Integer duration, String reason, String symptoms, String additionalNotes, String status,
                        LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.patientId = patientId;
         this.doctorId = doctorId;
         this.appointmentId = appointmentId;
         this.patientName = patientName;
+        this.age = age;
+        this.phoneNumber = phoneNumber;
         this.doctorName = doctorName;
         this.department = department;
         this.patientEmail = patientEmail;
@@ -55,14 +56,12 @@ public class Appointment {
         this.reason = reason;
         this.symptoms = symptoms;
         this.additionalNotes = additionalNotes;
-//        this.isEmergency = isEmergency;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
 
     // Getters and Setters
-
 
     public String getAppointmentId() {
         return appointmentId;
@@ -71,7 +70,6 @@ public class Appointment {
     public void setAppointmentId(String appointmentId) {
         this.appointmentId = appointmentId;
     }
-
 
     public String getId() {
         return id;
@@ -103,6 +101,22 @@ public class Appointment {
 
     public void setPatientName(String patientName) {
         this.patientName = patientName;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 
     public String getDoctorName() {
@@ -169,14 +183,6 @@ public class Appointment {
         this.additionalNotes = additionalNotes;
     }
 
-//    public boolean isEmergency() {
-//        return isEmergency;
-//    }
-//
-//    public void setEmergency(boolean emergency) {
-//        isEmergency = emergency;
-//    }
-
     public String getStatus() {
         return status;
     }
@@ -200,6 +206,4 @@ public class Appointment {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
-
-
 }
