@@ -1,5 +1,6 @@
 package meditrack.model;
 
+import meditrack.enums.AppointmentStatus;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -29,7 +30,7 @@ public class Appointment {
     private String reason;
     private String symptoms;
     private String additionalNotes;
-    private String status;
+    private AppointmentStatus status;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -39,7 +40,7 @@ public class Appointment {
 
     public Appointment(String id, String patientId, String doctorId, String appointmentId, String patientName, int age, String phoneNumber,
                        String doctorName, String department, String patientEmail, LocalDateTime appointmentDateTime,
-                       Integer duration, String reason, String symptoms, String additionalNotes, String status,
+                       Integer duration, String reason, String symptoms, String additionalNotes, AppointmentStatus status, // ✅ fixed
                        LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.patientId = patientId;
@@ -56,10 +57,11 @@ public class Appointment {
         this.reason = reason;
         this.symptoms = symptoms;
         this.additionalNotes = additionalNotes;
-        this.status = status;
+        this.status = status; // ✅ assign enum
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
+
 
     // Getters and Setters
 
@@ -183,11 +185,11 @@ public class Appointment {
         this.additionalNotes = additionalNotes;
     }
 
-    public String getStatus() {
+    public AppointmentStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(AppointmentStatus status) {
         this.status = status;
     }
 

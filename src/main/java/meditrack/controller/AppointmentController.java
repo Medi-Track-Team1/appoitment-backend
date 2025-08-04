@@ -85,11 +85,15 @@ public class AppointmentController {
         return ResponseEntity.ok(updatedAppointment);
     }
 
-    @DeleteMapping("/{appointmentId}")
-    public ResponseEntity<Void> deleteAppointment(@PathVariable String appointmentId) {
+    @DeleteMapping("/cancel/{appointmentId}")
+    public ResponseEntity<Void> cancelAppointment(@PathVariable String appointmentId) {
+        // Fetch the appointment
         AppointmentDTO appointment = appointmentService.getAppointmentById(appointmentId);
-        appointmentService.deleteAppointment(appointmentId);
 
+        // Update the appointment status to CANCELLED in the database
+        appointmentService.cancelAppointment(appointmentId);
+
+        // Send cancellation email
         emailService.sendAppointmentCancellation(
                 appointment.getPatientEmail(),
                 appointment.getPatientName(),
@@ -100,6 +104,7 @@ public class AppointmentController {
 
         return ResponseEntity.noContent().build();
     }
+
 
 
 
