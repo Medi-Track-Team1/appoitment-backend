@@ -56,6 +56,7 @@ import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -101,6 +102,10 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
     // Safe to remove if not using raw string IDs anymore
     List<Appointment> findByPatientIdAndAppointmentDateTimeAfter(String patientId, LocalDateTime date);
      List<Appointment> findByDoctorIdAndAppointmentDateTimeAfter(String doctorId, LocalDateTime date);
-    List<Appointment> findByDoctorIdAndStatus(String doctorId, String status);
+
+
+    List<Appointment> findByDoctorIdAndStatusIgnoreCase(String doctorId, String status);
+
+    Collection<Object> findByDoctorIdAndStatus(String doctorId, String completed);
 //    List<Appointment> findByIsEmergency(boolean isEmergency);
 }
