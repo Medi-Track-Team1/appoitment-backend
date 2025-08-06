@@ -25,4 +25,7 @@ void cancelAppointment(String appointmentId);
 //    void deleteAppointment(String appointmentId);
     Appointment confirmAppointment(String appointmentId);
 
+    List<AppointmentDTO> searchAppointments(String status, String startDate, String endDate);
+
+    List<AppointmentDTO> getCompletedAppointmentsByDoctor(String doctorId);
 }

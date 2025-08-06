@@ -187,9 +187,13 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
         }
 
-        return appointmentRepository.findByDoctorIdAndStatus(doctorId, "COMPLETED").stream()
+        List<Appointment> appointments = appointmentRepository.findByDoctorIdAndStatusIgnoreCase(doctorId, "COMPLETED");
+
+        return appointments.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+
+
     }
 
     @Override
@@ -248,6 +252,11 @@ public class AppointmentServiceImpl implements AppointmentService {
         return appointment;
     }
 
+    @Override
+    public List<AppointmentDTO> searchAppointments(String status, String startDate, String endDate) {
+        return List.of();
+    }
+
 
     // @Override
 //    public List<AppointmentDTO> getEmergencyAppointments() {
@@ -258,6 +267,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private AppointmentDTO convertToDTO(Appointment appointment) {
         return modelMapper.map(appointment, AppointmentDTO.class);
+    }
+    @Override
+    public List<AppointmentDTO> getCompletedAppointmentsByDoctor(String doctorId) {
+        List<Appointment> appointments = appointmentRepository.findByDoctorIdAndStatusIgnoreCase(doctorId, "COMPLETED");
+        return appointments.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
 
 
