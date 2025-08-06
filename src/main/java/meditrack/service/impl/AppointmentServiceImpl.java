@@ -154,7 +154,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setStatus(AppointmentStatus.CANCELLED);
         appointmentRepository.deleteByAppointmentId(appointmentId);
 
-        appointmentRepository.save(appointment); // 🔁 Save the updated status
+
     }
 
 
