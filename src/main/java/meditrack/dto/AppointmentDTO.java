@@ -29,7 +29,7 @@ public class AppointmentDTO {
     private String additionalNotes;
     private boolean isEmergency;
     private String status;
-
+    private int age;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
