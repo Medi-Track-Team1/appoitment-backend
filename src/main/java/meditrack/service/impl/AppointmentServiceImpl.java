@@ -152,6 +152,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
+        appointmentRepository.deleteByAppointmentId(appointmentId);
 
         appointmentRepository.save(appointment); // 🔁 Save the updated status
     }
