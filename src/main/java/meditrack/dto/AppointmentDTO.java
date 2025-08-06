@@ -20,7 +20,6 @@ public class AppointmentDTO {
     private String department;
     private String patientEmail;
     private String appointmentId;
-
     private String phoneNumber;
     private LocalDateTime appointmentDateTime;
     private Integer duration;
