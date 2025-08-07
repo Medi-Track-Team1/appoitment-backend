@@ -241,6 +241,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         stats.setConfirmedAppointments(appointmentRepository.countByStatus(AppointmentStatus.CONFIRMED.name()));
         stats.setPendingAppointments(appointmentRepository.countByStatus(AppointmentStatus.PENDING.name()));
         stats.setCompletedAppointments(appointmentRepository.countByStatus(AppointmentStatus.COMPLETED.name()));
+        stats.setCancelledAppointments(appointmentRepository.countByStatus(AppointmentStatus.CANCELLED.name()));
         return stats;
     }
 
