@@ -97,20 +97,45 @@ public class AppointmentController {
     }
 
     // ✅ FIXED: Cancel appointment (sets status to CANCELED)
-    @DeleteMapping("/cancel/{appointmentId}")
-    public ResponseEntity<Void> cancelAppointment(@PathVariable String appointmentId) {
-        AppointmentDTO appointment = appointmentService.getAppointmentById(appointmentId);
-        appointmentService.cancelAppointment(appointmentId);
+    // In your AppointmentController.java, replace the DELETE mapping with PUT:
 
-        emailService.sendAppointmentCancellation(
-                appointment.getPatientEmail(),
-                appointment.getPatientName(),
-                appointment.getDoctorName(),
-                appointment.getAppointmentDateTime().toLocalDate().toString(),
-                appointment.getAppointmentDateTime().toLocalTime().toString()
-        );
+    // ✅ FIXED: Cancel appointment (UPDATE status to CANCELED, don't delete)
+    @PutMapping("/cancel/{appointmentId}")
+    public ResponseEntity<AppointmentDTO> cancelAppointment(@PathVariable String appointmentId) {
+        try {
+            logger.info("Cancelling appointment: {}", appointmentId);
 
-        return ResponseEntity.noContent().build();
+            // Get appointment details before canceling (for email)
+            AppointmentDTO appointment = appointmentService.getAppointmentById(appointmentId);
+
+            // Cancel the appointment (updates status to CANCELED)
+            appointmentService.cancelAppointment(appointmentId);
+
+            // Get the updated appointment to return
+            AppointmentDTO canceledAppointment = appointmentService.getAppointmentById(appointmentId);
+
+            // Send cancellation email
+            try {
+                emailService.sendAppointmentCancellation(
+                        appointment.getPatientEmail(),
+                        appointment.getPatientName(),
+                        appointment.getDoctorName(),
+                        appointment.getAppointmentDateTime().toLocalDate().toString(),
+                        appointment.getAppointmentDateTime().toLocalTime().toString()
+                );
+            } catch (Exception emailError) {
+                logger.warn("Failed to send cancellation email: {}", emailError.getMessage());
+            }
+
+            return ResponseEntity.ok(canceledAppointment);
+
+        } catch (ResourceNotFoundException e) {
+            logger.error("Appointment not found: {}", appointmentId);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Error cancelling appointment {}: {}", appointmentId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @PostMapping("/{id}/reschedule")
