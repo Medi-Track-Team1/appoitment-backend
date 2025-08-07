@@ -13,7 +13,7 @@ public interface AppointmentService {
     AppointmentDTO getAppointmentById(String id);
     List<AppointmentDTO> getAllAppointments();
     AppointmentDTO updateAppointment(String id, AppointmentDTO appointmentDTO);
-    AppointmentDto markCompleted(String appointmentId);
+    AppointmentDTO markCompleted(String appointmentId);
     AppointmentDTO rescheduleAppointment(String id, LocalDateTime newDateTime);
     List<AppointmentDTO> getUpcomingAppointmentsByPatient(String patientId);
     List<AppointmentDTO> getUpcomingAppointmentsByDoctor(String doctorId);

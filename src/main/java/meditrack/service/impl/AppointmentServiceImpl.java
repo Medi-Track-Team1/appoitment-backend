@@ -78,17 +78,16 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAppointmentId(generateAppointmentId());
         appointment.setPatientId(patient.getPatientId());
         appointment.setDoctorId(doctor.getDoctorId());
-<<<<<<< HEAD
         appointment.setPatientName(appointmentDTO.getPatientName());
         appointment.setPatientEmail(appointmentDTO.getPatientEmail());
         appointment.setDoctorName(appointmentDTO.getDoctorName());
         appointment.setStatus(AppointmentStatus.valueOf("PENDING"));
-=======
+
         appointment.setPatientName(patient.getFullName());
         appointment.setPatientEmail(patient.getEmail());
         appointment.setDoctorName(doctor.getFullName());
         appointment.setStatus(AppointmentStatus.PENDING);
->>>>>>> ab3f21537670dab9c9e4300a66d37b580363c245
+
         appointment.setCreatedAt(LocalDateTime.now());
         appointment.setUpdatedAt(LocalDateTime.now());
 
@@ -148,7 +147,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
 
         // Set status to CANCELED (not CANCELLED)
-        appointment.setStatus(AppointmentStatus.CANCELED);
+        appointment.setStatus(AppointmentStatus.CANCELLED);
         appointment.setUpdatedAt(LocalDateTime.now());
 
         appointmentRepository.save(appointment);
@@ -199,10 +198,8 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
         }
 
-        // Get both COMPLETED and CANCELED appointments for history
-        List<Appointment> completedAppointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED);
-        List<Appointment> canceledAppointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.CANCELED);
-
+        List<Appointment> completedAppointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.name());
+        List<Appointment> canceledAppointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.CANCELLED.name());
         // Combine both lists
         List<Appointment> allHistoryAppointments = new java.util.ArrayList<>(completedAppointments);
         allHistoryAppointments.addAll(canceledAppointments);
@@ -241,9 +238,9 @@ public class AppointmentServiceImpl implements AppointmentService {
     public StatsDTO getAppointmentStats() {
         StatsDTO stats = new StatsDTO();
         stats.setTotalAppointments(appointmentRepository.count());
-        stats.setConfirmedAppointments(appointmentRepository.countByStatus(AppointmentStatus.CONFIRMED));
-        stats.setPendingAppointments(appointmentRepository.countByStatus(AppointmentStatus.PENDING));
-        stats.setCompletedAppointments(appointmentRepository.countByStatus(AppointmentStatus.COMPLETED));
+        stats.setConfirmedAppointments(appointmentRepository.countByStatus(AppointmentStatus.CONFIRMED.name()));
+        stats.setPendingAppointments(appointmentRepository.countByStatus(AppointmentStatus.PENDING.name()));
+        stats.setCompletedAppointments(appointmentRepository.countByStatus(AppointmentStatus.COMPLETED.name()));
         return stats;
     }
 
@@ -276,7 +273,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     public List<AppointmentDTO> getCompletedAppointmentsByDoctor(String doctorId) {
-        List<Appointment> appointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED);
+        List<Appointment> appointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.toString());
         return appointments.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
