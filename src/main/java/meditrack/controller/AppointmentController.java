@@ -19,9 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/appointments")
 @CrossOrigin(
-        origins = {"http://localhost:5174", "http://localhost:3000"},
-        methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS},
-        allowedHeaders = "*"
+        origins = {"http://localhost:5174", "http://localhost:3000"}
 )
 public class AppointmentController {
 
