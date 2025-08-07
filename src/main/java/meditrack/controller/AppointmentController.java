@@ -39,6 +39,7 @@ public class AppointmentController {
     public ResponseEntity<AppointmentDTO> createAppointment(@RequestBody AppointmentDTO appointmentDTO) {
         AppointmentDTO createdAppointment = appointmentService.createAppointment(appointmentDTO);
 
+
         try {
             if (createdAppointment.getPatientEmail() != null &&
                     createdAppointment.getPatientName() != null &&

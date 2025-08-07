@@ -78,10 +78,17 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAppointmentId(generateAppointmentId());
         appointment.setPatientId(patient.getPatientId());
         appointment.setDoctorId(doctor.getDoctorId());
+<<<<<<< HEAD
+        appointment.setPatientName(appointmentDTO.getPatientName());
+        appointment.setPatientEmail(appointmentDTO.getPatientEmail());
+        appointment.setDoctorName(appointmentDTO.getDoctorName());
+        appointment.setStatus(AppointmentStatus.valueOf("PENDING"));
+=======
         appointment.setPatientName(patient.getFullName());
         appointment.setPatientEmail(patient.getEmail());
         appointment.setDoctorName(doctor.getFullName());
         appointment.setStatus(AppointmentStatus.PENDING);
+>>>>>>> ab3f21537670dab9c9e4300a66d37b580363c245
         appointment.setCreatedAt(LocalDateTime.now());
         appointment.setUpdatedAt(LocalDateTime.now());
 
