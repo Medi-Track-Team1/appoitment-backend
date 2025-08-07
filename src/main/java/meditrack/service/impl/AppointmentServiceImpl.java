@@ -76,16 +76,16 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Appointment appointment = modelMapper.map(appointmentDTO, Appointment.class);
         appointment.setAppointmentId(generateAppointmentId());
-        appointment.setPatientId(patient.getPatientId());
-        appointment.setDoctorId(doctor.getDoctorId());
+        appointment.setPatientId(appointmentDTO.getPatientId());
+        appointment.setDoctorId(appointmentDTO.getDoctorId());
         appointment.setPatientName(appointmentDTO.getPatientName());
         appointment.setPatientEmail(appointmentDTO.getPatientEmail());
         appointment.setDoctorName(appointmentDTO.getDoctorName());
         appointment.setStatus(AppointmentStatus.valueOf("PENDING"));
 
-        appointment.setPatientName(patient.getFullName());
-        appointment.setPatientEmail(patient.getEmail());
-        appointment.setDoctorName(doctor.getFullName());
+        appointment.setPatientName(appointmentDTO.getPatientName());
+        appointment.setPatientEmail(appointmentDTO.getPatientEmail());
+        appointment.setDoctorName(appointmentDTO.getDoctorName());
         appointment.setStatus(AppointmentStatus.PENDING);
 
         appointment.setCreatedAt(LocalDateTime.now());
@@ -100,9 +100,9 @@ public class AppointmentServiceImpl implements AppointmentService {
                 String formattedTime = startTime.format(DateTimeFormatter.ofPattern("hh:mm a"));
 
                 emailService.sendAppointmentBooked(
-                        patient.getEmail(),
-                        patient.getFullName(),
-                        doctor.getFullName(),
+                        appointmentDTO.getPatientEmail(),
+                        appointmentDTO.getPatientName(),
+                        appointmentDTO.getDoctorName(),
                         formattedDate,
                         formattedTime
                 );
