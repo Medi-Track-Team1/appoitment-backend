@@ -82,8 +82,18 @@ public class AppointmentController {
     // ✅ FIXED: Mark appointment as completed (called when prescription is saved)
     @PutMapping("/{appointmentId}/complete")
     public ResponseEntity<AppointmentDTO> markAsCompleted(@PathVariable String appointmentId) {
-        AppointmentDTO completed = appointmentService.markCompleted(appointmentId);
-        return ResponseEntity.ok(completed);
+        try {
+            logger.info("Received request to mark appointment as completed: {}", appointmentId);
+            AppointmentDTO completed = appointmentService.markCompleted(appointmentId);
+            logger.info("Successfully marked appointment {} as completed", appointmentId);
+            return ResponseEntity.ok(completed);
+        } catch (ResourceNotFoundException e) {
+            logger.error("Appointment not found with ID: {}", appointmentId);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Error marking appointment {} as completed: {}", appointmentId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     // ✅ FIXED: Cancel appointment (sets status to CANCELED)
