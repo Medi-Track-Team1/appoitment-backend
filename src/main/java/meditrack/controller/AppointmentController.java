@@ -5,18 +5,27 @@ import meditrack.dto.StatsDTO;
 import meditrack.model.Appointment;
 import meditrack.service.AppointmentService;
 import meditrack.service.EmailService;
+import meditrack.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/appointments")
-@CrossOrigin(origins = "http://localhost:5174")
+@CrossOrigin(
+        origins = {"http://localhost:5174", "http://localhost:3000"},
+        methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS},
+        allowedHeaders = "*"
+)
 public class AppointmentController {
 
+    private static final Logger logger = LoggerFactory.getLogger(AppointmentController.class);
     private final AppointmentService appointmentService;
     private final EmailService emailService;
 
@@ -45,7 +54,7 @@ public class AppointmentController {
                 );
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error sending appointment booking email: {}", e.getMessage());
         }
 
         return ResponseEntity.ok(createdAppointment);
@@ -67,13 +76,17 @@ public class AppointmentController {
         AppointmentDTO updatedAppointment = appointmentService.updateAppointment(id, appointmentDTO);
 
         if ("CONFIRMED".equalsIgnoreCase(updatedAppointment.getStatus())) {
-            emailService.sendAppointmentConfirmation(
-                    updatedAppointment.getPatientEmail(),
-                    updatedAppointment.getPatientName(),
-                    updatedAppointment.getDoctorName(),
-                    updatedAppointment.getAppointmentDateTime().toLocalDate().toString(),
-                    updatedAppointment.getAppointmentDateTime().toLocalTime().toString()
-            );
+            try {
+                emailService.sendAppointmentConfirmation(
+                        updatedAppointment.getPatientEmail(),
+                        updatedAppointment.getPatientName(),
+                        updatedAppointment.getDoctorName(),
+                        updatedAppointment.getAppointmentDateTime().toLocalDate().toString(),
+                        updatedAppointment.getAppointmentDateTime().toLocalTime().toString()
+                );
+            } catch (Exception e) {
+                logger.error("Error sending confirmation email: {}", e.getMessage());
+            }
         }
 
         return ResponseEntity.ok(updatedAppointment);
@@ -95,9 +108,6 @@ public class AppointmentController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-
-    // ✅ FIXED: Cancel appointment (sets status to CANCELED)
-    // In your AppointmentController.java, replace the DELETE mapping with PUT:
 
     // ✅ FIXED: Cancel appointment (UPDATE status to CANCELED, don't delete)
     @PutMapping("/cancel/{appointmentId}")
@@ -141,17 +151,29 @@ public class AppointmentController {
     @PostMapping("/{id}/reschedule")
     public ResponseEntity<AppointmentDTO> rescheduleAppointment(
             @PathVariable String id, @RequestParam LocalDateTime newDateTime) {
-        AppointmentDTO rescheduledAppointment = appointmentService.rescheduleAppointment(id, newDateTime);
+        try {
+            AppointmentDTO rescheduledAppointment = appointmentService.rescheduleAppointment(id, newDateTime);
 
-        emailService.sendAppointmentReschedule(
-                rescheduledAppointment.getPatientEmail(),
-                rescheduledAppointment.getPatientName(),
-                rescheduledAppointment.getDoctorName(),
-                rescheduledAppointment.getAppointmentDateTime().toLocalDate().toString(),
-                rescheduledAppointment.getAppointmentDateTime().toLocalTime().toString()
-        );
+            try {
+                emailService.sendAppointmentReschedule(
+                        rescheduledAppointment.getPatientEmail(),
+                        rescheduledAppointment.getPatientName(),
+                        rescheduledAppointment.getDoctorName(),
+                        rescheduledAppointment.getAppointmentDateTime().toLocalDate().toString(),
+                        rescheduledAppointment.getAppointmentDateTime().toLocalTime().toString()
+                );
+            } catch (Exception e) {
+                logger.error("Error sending reschedule email: {}", e.getMessage());
+            }
 
-        return ResponseEntity.ok(rescheduledAppointment);
+            return ResponseEntity.ok(rescheduledAppointment);
+        } catch (ResourceNotFoundException e) {
+            logger.error("Appointment not found: {}", id);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Error rescheduling appointment: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/patient/{patientId}/upcoming")
@@ -176,15 +198,29 @@ public class AppointmentController {
 
     @PutMapping("/{appointmentId}/confirm")
     public ResponseEntity<String> confirmAppointment(@PathVariable String appointmentId) {
-        Appointment appointment = appointmentService.confirmAppointment(appointmentId);
-        emailService.sendAppointmentConfirmation(
-                appointment.getPatientEmail(),
-                appointment.getPatientName(),
-                appointment.getDoctorName(),
-                appointment.getAppointmentDateTime().toLocalDate().toString(),
-                appointment.getAppointmentDateTime().toLocalTime().toString()
-        );
-        return ResponseEntity.ok("Appointment confirmed successfully. Confirmation email sent.");
+        try {
+            Appointment appointment = appointmentService.confirmAppointment(appointmentId);
+
+            try {
+                emailService.sendAppointmentConfirmation(
+                        appointment.getPatientEmail(),
+                        appointment.getPatientName(),
+                        appointment.getDoctorName(),
+                        appointment.getAppointmentDateTime().toLocalDate().toString(),
+                        appointment.getAppointmentDateTime().toLocalTime().toString()
+                );
+            } catch (Exception e) {
+                logger.error("Error sending confirmation email: {}", e.getMessage());
+            }
+
+            return ResponseEntity.ok("Appointment confirmed successfully. Confirmation email sent.");
+        } catch (ResourceNotFoundException e) {
+            logger.error("Appointment not found: {}", appointmentId);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Error confirming appointment: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/search")
