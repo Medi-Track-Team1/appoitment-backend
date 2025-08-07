@@ -152,8 +152,21 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
-        appointmentRepository.deleteByAppointmentId(appointmentId);
 
+        public AppointmentDto markCompleted(String appointmentId) {
+            System.out.println("Marking appointment as completed: " + appointmentId);
+
+            // Find by business logic appointmentId
+            Appointments appointment = appointmentRepository.findByAppointmentId(appointmentId)
+                    .orElseThrow(() -> new RuntimeException("Appointment not found with appointmentId: " + appointmentId));
+
+            appointment.setStatus("completed");
+            Appointments savedAppointment = appointmentRepository.save(appointment);
+
+            System.out.println("Successfully marked appointment " + appointmentId + " as completed");
+
+            return AppointmentMapper.mapToAppointmentDto(savedAppointment);
+        }
 
     }
 
@@ -268,6 +281,20 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private AppointmentDTO convertToDTO(Appointment appointment) {
         return modelMapper.map(appointment, AppointmentDTO.class);
+    }
+    public AppointmentDto markCompleted(String appointmentId) {
+        System.out.println("Marking appointment as completed: " + appointmentId);
+
+        // Find by business logic appointmentId
+        Appointments appointment = appointmentRepository.findByAppointmentId(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Appointment not found with appointmentId: " + appointmentId));
+
+        appointment.setStatus(AppointmentStatus.valueOf("PENDING"));
+        Appointments savedAppointment = appointmentRepository.save(appointment);
+
+        System.out.println("Successfully marked appointment " + appointmentId + " as completed");
+
+        return AppointmentMapper.mapToAppointmentDto(savedAppointment);
     }
     @Override
     public List<AppointmentDTO> getCompletedAppointmentsByDoctor(String doctorId) {

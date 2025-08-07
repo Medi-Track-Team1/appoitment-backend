@@ -254,7 +254,11 @@ public class AppointmentController {
 
         return ResponseEntity.ok(updatedAppointment);
     }
-
+    @PutMapping("/{appointmentId}/complete")
+    public ResponseEntity<AppointmentDto> markAsCompleted(@PathVariable String appointmentId) {
+        AppointmentDto completed = appointmentService.markCompleted(appointmentId);
+        return ResponseEntity.ok(completed);
+    }
     // ✅ Cancel Appointment
     @DeleteMapping("/cancel/{appointmentId}")
     public ResponseEntity<Void> cancelAppointment(@PathVariable String appointmentId) {
