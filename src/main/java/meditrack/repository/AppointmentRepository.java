@@ -107,5 +107,6 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
     List<Appointment> findByDoctorIdAndStatusIgnoreCase(String doctorId, String status);
 
     List<Appointment> findByDoctorIdAndStatus(String doctorId, String completed);
+    List<Appointment> findByPatientIdAndStatus(String doctorId, String completed);
 //    List<Appointment> findByIsEmergency(boolean isEmergency);
 }

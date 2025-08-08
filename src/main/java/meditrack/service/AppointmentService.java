@@ -26,6 +26,7 @@ void cancelAppointment(String appointmentId);
     Appointment confirmAppointment(String appointmentId);
 
     List<AppointmentDTO> searchAppointments(String status, String startDate, String endDate);
-
+    List<Appointment> findByPatientIdAndStatus(String patientId, String status);
     List<AppointmentDTO> getCompletedAppointmentsByDoctor(String doctorId);
+    List<AppointmentDTO> getCompletedAppointmentsByPatient(String patientId);
 }
