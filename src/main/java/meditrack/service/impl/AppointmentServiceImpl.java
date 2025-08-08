@@ -273,6 +273,11 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     @Override
+    public List<Appointment> findByPatientIdAndStatus(String patientId, String status) {
+        return List.of();
+    }
+
+    @Override
     public List<AppointmentDTO> getCompletedAppointmentsByDoctor(String doctorId) {
         List<Appointment> appointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.toString());
         return appointments.stream()
@@ -283,4 +288,11 @@ public class AppointmentServiceImpl implements AppointmentService {
     private AppointmentDTO convertToDTO(Appointment appointment) {
         return modelMapper.map(appointment, AppointmentDTO.class);
     }
+    @Override
+    public List<AppointmentDTO> getCompletedAppointmentsByPatient(String patientId) {
+        List<Appointment> completedAppointments = appointmentRepository
+                .findByPatientIdAndStatus(patientId, AppointmentStatus.COMPLETED.name());
+        return completedAppointments.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());}
 }

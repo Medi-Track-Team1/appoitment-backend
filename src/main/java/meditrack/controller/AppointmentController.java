@@ -236,4 +236,8 @@ public class AppointmentController {
     public ResponseEntity<List<AppointmentDTO>> getCompletedAppointmentsByDoctor(@PathVariable String doctorId) {
         return ResponseEntity.ok(appointmentService.getCompletedAppointmentsByDoctor(doctorId));
     }
+    @GetMapping("/patient/{patientId}/completed")
+    public ResponseEntity<List<AppointmentDTO>> getCompletedAppointmentsByPatient(@PathVariable String patientId) {
+        return ResponseEntity.ok(appointmentService.getCompletedAppointmentsByPatient(patientId));
+    }
 }
