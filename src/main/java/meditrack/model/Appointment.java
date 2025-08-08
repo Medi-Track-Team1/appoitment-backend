@@ -37,7 +37,7 @@ public class Appointment {
     private LocalDateTime updatedAt;
 
     public Appointment() {
-        this.appointmentId = generateAppointmentIdWithUUID();
+
     }
 
     public Appointment(String id, String patientId, String doctorId, String appointmentId, String patientName, int age, String phoneNumber,
@@ -48,7 +48,7 @@ public class Appointment {
         this.id = id;
         this.patientId = patientId;
         this.doctorId = doctorId;
-
+        this.appointmentId=appointmentId;
         this.patientName = patientName;
         this.age = age;
         this.phoneNumber = phoneNumber;
@@ -66,14 +66,9 @@ public class Appointment {
     }
 
 
-    // Getters and Setters
-    private String generateAppointmentIdWithTimestamp() {
-        return "APT-" + System.currentTimeMillis();
-    }
 
-    private String generateAppointmentIdWithUUID() {
-        return "APT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-    }
+
+
     public String getAppointmentId() {
         return appointmentId;
     }
