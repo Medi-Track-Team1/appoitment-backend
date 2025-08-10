@@ -190,6 +190,12 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getAppointmentHistoryByDoctor(doctorId));
     }
 
+    @GetMapping("/patient/{patientId}/history")
+    public ResponseEntity<List<AppointmentDTO>> getAppointmentHistoryByPatient(@PathVariable String patientId) {
+        return ResponseEntity.ok(appointmentService.getAppointmentHistoryByPatient(patientId));
+    }
+
+
     @GetMapping("/stats")
     public ResponseEntity<StatsDTO> getAppointmentStats() {
         return ResponseEntity.ok(appointmentService.getAppointmentStats());
