@@ -288,6 +288,25 @@ public class AppointmentServiceImpl implements AppointmentService {
     private AppointmentDTO convertToDTO(Appointment appointment) {
         return modelMapper.map(appointment, AppointmentDTO.class);
     }
+
+    @Override
+    public List<AppointmentDTO> getAppointmentHistoryByPatient(String patientId) {
+        if (!patientRepository.existsByPatientId(patientId)) {
+            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+        }
+
+        List<Appointment> completedAppointments = appointmentRepository.findByPatientIdAndStatus(patientId, AppointmentStatus.COMPLETED.name());
+        List<Appointment> canceledAppointments = appointmentRepository.findByPatientIdAndStatus(patientId, AppointmentStatus.CANCELLED.name());
+
+        List<Appointment> allHistoryAppointments = new java.util.ArrayList<>(completedAppointments);
+        allHistoryAppointments.addAll(canceledAppointments);
+
+        return allHistoryAppointments.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+
     @Override
     public List<AppointmentDTO> getCompletedAppointmentsByPatient(String patientId) {
         List<Appointment> completedAppointments = appointmentRepository
@@ -296,3 +315,4 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());}
 }
+
