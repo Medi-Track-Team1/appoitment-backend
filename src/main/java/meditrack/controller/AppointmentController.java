@@ -175,6 +175,19 @@ public class AppointmentController {
         }
     }
 
+    @DeleteMapping("/{appointmentId}")
+    public ResponseEntity<String> deleteAppointment(@PathVariable String appointmentId) {
+        boolean isDeleted = appointmentService.deleteAppointmentById(appointmentId);
+        if (isDeleted) {
+            return ResponseEntity.ok("Appointment deleted successfully");
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Appointment not found");
+        }
+    }
+
+
+
+
     @GetMapping("/patient/{patientId}/upcoming")
     public ResponseEntity<List<AppointmentDTO>> getUpcomingAppointmentsByPatient(@PathVariable String patientId) {
         return ResponseEntity.ok(appointmentService.getUpcomingAppointmentsByPatient(patientId));
