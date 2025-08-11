@@ -19,10 +19,10 @@ public interface AppointmentService {
     List<AppointmentDTO> getUpcomingAppointmentsByDoctor(String doctorId);
     List<AppointmentDTO> getAppointmentHistoryByDoctor(String doctorId);
     StatsDTO getAppointmentStats();
-//    List<AppointmentDTO> getEmergencyAppointments();
-void cancelAppointment(String appointmentId);
+    //    List<AppointmentDTO> getEmergencyAppointments();
+    void cancelAppointment(String appointmentId);
 
-//    void deleteAppointment(String appointmentId);
+    //    void deleteAppointment(String appointmentId);
     Appointment confirmAppointment(String appointmentId);
 
     List<AppointmentDTO> searchAppointments(String status, String startDate, String endDate);
@@ -31,4 +31,5 @@ void cancelAppointment(String appointmentId);
     List<AppointmentDTO> getCompletedAppointmentsByPatient(String patientId);
     List<AppointmentDTO> getAppointmentHistoryByPatient(String patientId);
 
+    boolean deleteAppointmentById(String appointmentId);
 }
