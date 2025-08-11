@@ -1,7 +1,3 @@
-
-
-
-
 package meditrack.service.impl;
 
 import meditrack.dto.AppointmentDTO;
@@ -26,7 +22,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 import meditrack.enums.AppointmentStatus;
-
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,12 +76,18 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Appointment appointment = modelMapper.map(appointmentDTO, Appointment.class);
         appointment.setAppointmentId(generateAppointmentId());
-        appointment.setPatientId(patient.getPatientId());
-        appointment.setDoctorId(doctor.getDoctorId());
-        appointment.setPatientName(patient.getFullName());
-        appointment.setPatientEmail(patient.getEmail());
-        appointment.setDoctorName(doctor.getFullName());
+        appointment.setPatientId(appointmentDTO.getPatientId());
+        appointment.setDoctorId(appointmentDTO.getDoctorId());
+        appointment.setPatientName(appointmentDTO.getPatientName());
+        appointment.setPatientEmail(appointmentDTO.getPatientEmail());
+        appointment.setDoctorName(appointmentDTO.getDoctorName());
         appointment.setStatus(AppointmentStatus.valueOf("PENDING"));
+
+        appointment.setPatientName(appointmentDTO.getPatientName());
+        appointment.setPatientEmail(appointmentDTO.getPatientEmail());
+        appointment.setDoctorName(appointmentDTO.getDoctorName());
+        appointment.setStatus(AppointmentStatus.PENDING);
+
         appointment.setCreatedAt(LocalDateTime.now());
         appointment.setUpdatedAt(LocalDateTime.now());
 
@@ -99,9 +100,9 @@ public class AppointmentServiceImpl implements AppointmentService {
                 String formattedTime = startTime.format(DateTimeFormatter.ofPattern("hh:mm a"));
 
                 emailService.sendAppointmentBooked(
-                        patient.getEmail(),
-                        patient.getFullName(),
-                        doctor.getFullName(),
+                        appointmentDTO.getPatientEmail(),
+                        appointmentDTO.getPatientName(),
+                        appointmentDTO.getDoctorName(),
                         formattedDate,
                         formattedTime
                 );
@@ -112,6 +113,19 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         return convertToDTO(saved);
     }
+
+
+    @Override
+    public boolean deleteAppointmentById(String appointmentId) {
+        if (appointmentRepository.existsByAppointmentId(appointmentId)) {
+            appointmentRepository.deleteByAppointmentId(appointmentId); // ✅ use this, not deleteById
+            return true;
+        }
+        return false;
+    }
+
+
+
 
     @Override
     public AppointmentDTO getAppointmentById(String appointmentId) {
@@ -138,26 +152,36 @@ public class AppointmentServiceImpl implements AppointmentService {
         return convertToDTO(updated);
     }
 
-//    @Override
-//    public void deleteAppointment(String appointmentId) {
-//        Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
-//                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
-//        appointmentRepository.delete(appointment);
-//    }
-
-
     @Override
     public void cancelAppointment(String appointmentId) {
+        logger.info("Cancelling appointment with ID: {}", appointmentId);
+
         Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
 
+        // Set status to CANCELED (not CANCELLED)
         appointment.setStatus(AppointmentStatus.CANCELLED);
+        appointment.setUpdatedAt(LocalDateTime.now());
 
-        appointmentRepository.save(appointment); // 🔁 Save the updated status
+        appointmentRepository.save(appointment);
+        logger.info("Appointment {} successfully cancelled", appointmentId);
     }
 
+    @Override
+    public AppointmentDTO markCompleted(String appointmentId) {
+        logger.info("Marking appointment as completed: {}", appointmentId);
 
+        Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with appointmentId: " + appointmentId));
 
+        appointment.setStatus(AppointmentStatus.COMPLETED);
+        appointment.setUpdatedAt(LocalDateTime.now());
+        Appointment savedAppointment = appointmentRepository.save(appointment);
+
+        logger.info("Successfully marked appointment {} as completed", appointmentId);
+
+        return convertToDTO(savedAppointment);
+    }
 
     @Override
     public List<AppointmentDTO> getUpcomingAppointmentsByPatient(String patientId) {
@@ -187,7 +211,13 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
         }
 
-        return appointmentRepository.findByDoctorIdAndStatus(doctorId, "COMPLETED").stream()
+        List<Appointment> completedAppointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.name());
+        List<Appointment> canceledAppointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.CANCELLED.name());
+        // Combine both lists
+        List<Appointment> allHistoryAppointments = new java.util.ArrayList<>(completedAppointments);
+        allHistoryAppointments.addAll(canceledAppointments);
+
+        return allHistoryAppointments.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
@@ -211,7 +241,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         appointment.setAppointmentDateTime(newDateTime);
-        appointment.setStatus(AppointmentStatus.valueOf("RESCHEDULED"));
+        appointment.setStatus(AppointmentStatus.RESCHEDULED);
         appointment.setUpdatedAt(LocalDateTime.now());
 
         return convertToDTO(appointmentRepository.save(appointment));
@@ -221,18 +251,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     public StatsDTO getAppointmentStats() {
         StatsDTO stats = new StatsDTO();
         stats.setTotalAppointments(appointmentRepository.count());
-//        stats.setEmergencyCases(appointmentRepository.countByIsEmergency(true));
-        stats.setConfirmedAppointments(appointmentRepository.countByStatus("CONFIRMED"));
-        stats.setPendingAppointments(appointmentRepository.countByStatus("PENDING"));
-        stats.setCompletedAppointments(appointmentRepository.countByStatus("COMPLETED"));
+        stats.setConfirmedAppointments(appointmentRepository.countByStatus(AppointmentStatus.CONFIRMED.name()));
+        stats.setPendingAppointments(appointmentRepository.countByStatus(AppointmentStatus.PENDING.name()));
+        stats.setCompletedAppointments(appointmentRepository.countByStatus(AppointmentStatus.COMPLETED.name()));
+        stats.setCancelledAppointments(appointmentRepository.countByStatus(AppointmentStatus.CANCELLED.name()));
         return stats;
     }
+
     @Override
     public Appointment confirmAppointment(String appointmentId) {
         Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with ID: " + appointmentId));
 
-        appointment.setStatus(AppointmentStatus.valueOf("CONFIRMED"));
+        appointment.setStatus(AppointmentStatus.CONFIRMED);
+        appointment.setUpdatedAt(LocalDateTime.now());
 
         appointmentRepository.save(appointment);
 
@@ -248,19 +280,54 @@ public class AppointmentServiceImpl implements AppointmentService {
         return appointment;
     }
 
+    @Override
+    public List<AppointmentDTO> searchAppointments(String status, String startDate, String endDate) {
+        return List.of();
+    }
 
-    // @Override
-//    public List<AppointmentDTO> getEmergencyAppointments() {
-//        return appointmentRepository.findByIsEmergency(true).stream()
-//                .map(this::convertToDTO)
-//                .collect(Collectors.toList());
-//    }
+    @Override
+    public List<Appointment> findByPatientIdAndStatus(String patientId, String status) {
+        return List.of();
+    }
+
+    @Override
+    public List<AppointmentDTO> getCompletedAppointmentsByDoctor(String doctorId) {
+        List<Appointment> appointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.toString());
+        return appointments.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
 
     private AppointmentDTO convertToDTO(Appointment appointment) {
         return modelMapper.map(appointment, AppointmentDTO.class);
     }
 
+    @Override
+    public List<AppointmentDTO> getAppointmentHistoryByPatient(String patientId) {
+        if (!patientRepository.existsByPatientId(patientId)) {
+            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+        }
+
+        List<Appointment> completedAppointments = appointmentRepository.findByPatientIdAndStatus(patientId, AppointmentStatus.COMPLETED.name());
+        List<Appointment> canceledAppointments = appointmentRepository.findByPatientIdAndStatus(patientId, AppointmentStatus.CANCELLED.name());
+
+        List<Appointment> allHistoryAppointments = new java.util.ArrayList<>(completedAppointments);
+        allHistoryAppointments.addAll(canceledAppointments);
+
+        return allHistoryAppointments.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
 
 
-
+    @Override
+    public List<AppointmentDTO> getCompletedAppointmentsByPatient(String patientId) {
+        List<Appointment> completedAppointments = appointmentRepository
+                .findByPatientIdAndStatus(patientId, AppointmentStatus.COMPLETED.name());
+        return completedAppointments.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());}
 }
+
+
+
