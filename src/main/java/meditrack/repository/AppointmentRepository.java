@@ -21,8 +21,6 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
 
     // For finding by the custom appointment ID
     Optional<Appointment> findByAppointmentId(String appointmentId);
-    void deleteByAppointmentId(String appointmentId);
-    boolean existsByAppointmentId(String appointmentId); // ✅ Needed for random ID generation
 
     // ✅ Custom queries using @DBRef objectId reference
     @Query("{ 'patient.$id' : ?0 }")
@@ -57,7 +55,7 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
     // Filtered queries (if you store patientId/doctorId as strings in future)
     // Safe to remove if not using raw string IDs anymore
     List<Appointment> findByPatientIdAndAppointmentDateTimeAfter(String patientId, LocalDateTime date);
-     List<Appointment> findByDoctorIdAndAppointmentDateTimeAfter(String doctorId, LocalDateTime date);
+    List<Appointment> findByDoctorIdAndAppointmentDateTimeAfter(String doctorId, LocalDateTime date);
 
 
     List<Appointment> findByDoctorIdAndStatusIgnoreCase(String doctorId, String status);
@@ -65,4 +63,8 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
     List<Appointment> findByDoctorIdAndStatus(String doctorId, String completed);
     List<Appointment> findByPatientIdAndStatus(String doctorId, String completed);
 //    List<Appointment> findByIsEmergency(boolean isEmergency);
+
+    boolean existsByAppointmentId(String appointmentId);
+
+    void deleteByAppointmentId(String appointmentId); // ✅ Keep only ONE
 }
