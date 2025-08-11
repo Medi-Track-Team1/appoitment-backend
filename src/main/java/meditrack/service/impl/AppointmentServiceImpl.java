@@ -114,6 +114,19 @@ public class AppointmentServiceImpl implements AppointmentService {
         return convertToDTO(saved);
     }
 
+
+    @Override
+    public boolean deleteAppointmentById(String appointmentId) {
+        if (appointmentRepository.existsByAppointmentId(appointmentId)) {
+            appointmentRepository.deleteByAppointmentId(appointmentId); // ✅ use this, not deleteById
+            return true;
+        }
+        return false;
+    }
+
+
+
+
     @Override
     public AppointmentDTO getAppointmentById(String appointmentId) {
         Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
@@ -315,4 +328,6 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());}
 }
+
+
 
