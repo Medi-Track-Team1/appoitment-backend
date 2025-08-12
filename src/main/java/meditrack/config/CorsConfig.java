@@ -13,6 +13,33 @@ package meditrack.config;//// Create this file: src/main/java/meditrack/config/C
 //import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 //
 // SIMPLIFIED APPROACH: Just use WebMvcConfigurer without CorsFilter bean
+// import org.springframework.context.annotation.Configuration;
+// import org.springframework.web.servlet.config.annotation.CorsRegistry;
+// import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+// import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+// @Configuration
+// @EnableWebMvc
+// public class CorsConfig implements WebMvcConfigurer {
+
+//     @Override
+//     public void addCorsMappings(CorsRegistry registry) {
+//         registry.addMapping("/")
+//                 .allowedOrigins(
+//                         "http://localhost:3000",
+//                         "http://localhost:5173",
+//                         "http://localhost:5174"
+//                 )
+//                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD")
+//                 .allowedHeaders("*")
+//                 .exposedHeaders("*")
+//                 .allowCredentials(false)
+//                 .maxAge(3600);
+//     }
+// }
+
+package meditrack.config;
+
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
@@ -21,14 +48,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 @EnableWebMvc
 public class CorsConfig implements WebMvcConfigurer {
-
+    
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/")
+        registry.addMapping("/**")  // Fixed: was "/" now "/**" to match all paths
                 .allowedOrigins(
                         "http://localhost:3000",
-                        "http://localhost:5173",
-                        "http://localhost:5174"
+                        "http://localhost:5173", 
+                        "http://localhost:5174",
+                        "https://appoitment-backend.onrender.com", // Add your deployed frontend URL here
+                        "https://appointment-backend.onrender.com"  // Fixed spelling
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD")
                 .allowedHeaders("*")
