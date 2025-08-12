@@ -1,3 +1,4 @@
+
 package meditrack.repository;
 
 import meditrack.model.Appointment;
@@ -7,6 +8,7 @@ import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,18 +43,27 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
     List<Appointment> findByPatientIdAndAppointmentDateTimeAfter(String patientId, LocalDateTime date);
     List<Appointment> findByDoctorIdAndAppointmentDateTimeAfter(String doctorId, LocalDateTime date);
 
+
+
     List<Appointment> findByDoctorIdAndStatusIgnoreCase(String doctorId, String status);
-    List<Appointment> findByDoctorIdAndStatus(String doctorId, String status);
-    List<Appointment> findByPatientIdAndStatus(String patientId, String status);
+
+    List<Appointment> findByDoctorIdAndStatus(String doctorId, String completed);
+    List<Appointment> findByPatientIdAndStatus(String doctorId, String completed);
+//    List<Appointment> findByIsEmergency(boolean isEmergency);
 
     boolean existsByAppointmentId(String appointmentId);
 
-    // ✅ Added method to check conflicts with nested patient/doctor IDs
-    boolean existsByPatient_PatientIdAndDoctor_DoctorIdAndAppointmentDateTime(
-            String patientId,
-            String doctorId,
-            LocalDateTime appointmentDateTime
-    );
-
     void deleteByAppointmentId(String appointmentId);
+
+
+    // Check overlapping doctor appointment:
+
+    // Check overlapping appointment for patient & doctor:
+    @Query("{ 'patient.patientId': ?0, 'doctor.doctorId': ?1, " +
+            " 'appointmentDateTime': { $lt: ?3 }, " +
+            " 'appointmentEndDateTime': { $gt: ?2 } }")
+    Boolean existsOverlappingAppointment(String patientId, String doctorId, LocalDateTime requestedStart, LocalDateTime requestedEnd);
+
+    boolean existsByPatientIdAndDoctorIdAndAppointmentDateTime(String patientId, String doctorId, LocalDateTime appointmentDateTime);
 }
+

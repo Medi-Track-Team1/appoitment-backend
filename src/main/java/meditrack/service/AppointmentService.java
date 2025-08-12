@@ -32,4 +32,9 @@ public interface AppointmentService {
     List<AppointmentDTO> getAppointmentHistoryByPatient(String patientId);
 
     boolean deleteAppointmentById(String appointmentId);
+
+
+
+
 }
+
