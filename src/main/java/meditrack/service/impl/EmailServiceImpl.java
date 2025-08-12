@@ -77,15 +77,30 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public void sendAppointmentCancellation(String to, String patientName, String doctorName, String date, String time) {
+    public void sendAppointmentCancellation(
+            String to,
+            String patientName,
+            String doctorName,
+            String date,
+            String time,
+            String reason) {
+
         String subject = "Appointment Cancellation Notice – MediTrack";
+
         String body = "Dear " + patientName + ",\n\n"
-//
-                +"We regret to inform you that your upcoming appointment with Dr."+ doctorName+", originally scheduled for "+date+" at" +time+", has been cancelled due to unforeseen circumstances.\n"
-                +"We sincerely apologize for any inconvenience this may cause and truly appreciate your understanding.\n\n"
-                +"Our team would be happy to assist you in rescheduling the appointment at your convenience. Please contact us at 8610260854 , reply to this email , to choose a new date and time.\n"
-                +"Thank you for your patience and continued trust in MediTrack. We remain committed to your health and well-being.\n\n"
-                + "Warm Regards,\nMediTrack Team,\nMediTrack, \nPhone :8610260854, \nEmail:meditrackhealthinfo@gmail.com";
+                + "We regret to inform you that your upcoming appointment with Dr. "
+                + doctorName + ", originally scheduled for " + date + " at " + time
+                + ", has been cancelled due to the following reason:\n\n"
+                + reason + "\n\n"
+                + "We sincerely apologize for any inconvenience this may cause and truly appreciate your understanding.\n\n"
+                + "Our team would be happy to assist you in rescheduling the appointment at your convenience. "
+                + "Please contact us at 8610260854 or reply to this email to choose a new date and time.\n\n"
+                + "Thank you for your patience and continued trust in MediTrack. We remain committed to your health and well-being.\n\n"
+                + "Warm Regards,\n"
+                + "MediTrack Team\n"
+                + "Phone: 8610260854\n"
+                + "Email: meditrackhealthinfo@gmail.com";
+
         sendEmail(to, subject, body);
     }
 

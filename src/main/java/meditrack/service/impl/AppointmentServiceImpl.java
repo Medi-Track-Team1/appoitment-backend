@@ -166,19 +166,23 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     @Override
-    public void cancelAppointment(String appointmentId) {
-        logger.info("Cancelling appointment with ID: {}", appointmentId);
+    public void cancelAppointment(String appointmentId, String reason) {
+        logger.info("Cancelling appointment with ID: {} | Reason: {}", appointmentId, reason);
 
         Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
 
-        // Set status to CANCELED (not CANCELLED)
+        // Update status
         appointment.setStatus(AppointmentStatus.CANCELLED);
         appointment.setUpdatedAt(LocalDateTime.now());
+
+        // ✅ Store the cancellation reason if your entity has a field for it
+        appointment.setCancellationReason(reason);
 
         appointmentRepository.save(appointment);
         logger.info("Appointment {} successfully cancelled", appointmentId);
     }
+
 
     @Override
     public AppointmentDTO markCompleted(String appointmentId) {
