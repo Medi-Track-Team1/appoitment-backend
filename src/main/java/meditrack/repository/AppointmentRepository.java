@@ -66,5 +66,16 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
 
     boolean existsByAppointmentId(String appointmentId);
 
-    void deleteByAppointmentId(String appointmentId); // ✅ Keep only ONE
+    void deleteByAppointmentId(String appointmentId);
+
+
+    // Check overlapping doctor appointment:
+
+    // Check overlapping appointment for patient & doctor:
+    @Query("{ 'patient.patientId': ?0, 'doctor.doctorId': ?1, " +
+            " 'appointmentDateTime': { $lt: ?3 }, " +
+            " 'appointmentEndDateTime': { $gt: ?2 } }")
+    Boolean existsOverlappingAppointment(String patientId, String doctorId, LocalDateTime requestedStart, LocalDateTime requestedEnd);
+
+    boolean existsByPatientIdAndDoctorIdAndAppointmentDateTime(String patientId, String doctorId, LocalDateTime appointmentDateTime);
 }

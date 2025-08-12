@@ -65,15 +65,18 @@ public class AppointmentServiceImpl implements AppointmentService {
         Doctor doctor = doctorRepository.findByDoctorId(appointmentDTO.getDoctorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found with id: " + appointmentDTO.getDoctorId()));
 
-        LocalDateTime startTime = appointmentDTO.getAppointmentDateTime();
-        LocalDateTime endTime = startTime.plusMinutes(appointmentDTO.getDuration());
+        // Check if exact appointment time already booked by this patient for this doctor
+        boolean conflictExists = appointmentRepository.existsByPatientIdAndDoctorIdAndAppointmentDateTime(
+                appointmentDTO.getPatientId(),
+                appointmentDTO.getDoctorId(),
+                appointmentDTO.getAppointmentDateTime());
 
-        List<Appointment> conflicts = appointmentRepository
-                .findByDateTimeBetweenAndDoctorId(startTime, endTime, doctor.getDoctorId());
-        if (!conflicts.isEmpty()) {
-            throw new ValidationException("Doctor has a conflicting appointment at this time.");
+        if (conflictExists) {
+            throw new ValidationException("This exact time slot is already booked.");
         }
 
+
+        // Proceed to save appointment
         Appointment appointment = modelMapper.map(appointmentDTO, Appointment.class);
         appointment.setAppointmentId(generateAppointmentId());
         appointment.setPatientId(appointmentDTO.getPatientId());
@@ -81,13 +84,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setPatientName(appointmentDTO.getPatientName());
         appointment.setPatientEmail(appointmentDTO.getPatientEmail());
         appointment.setDoctorName(appointmentDTO.getDoctorName());
-        appointment.setStatus(AppointmentStatus.valueOf("PENDING"));
-
-        appointment.setPatientName(appointmentDTO.getPatientName());
-        appointment.setPatientEmail(appointmentDTO.getPatientEmail());
-        appointment.setDoctorName(appointmentDTO.getDoctorName());
         appointment.setStatus(AppointmentStatus.PENDING);
-
         appointment.setCreatedAt(LocalDateTime.now());
         appointment.setUpdatedAt(LocalDateTime.now());
 
@@ -96,8 +93,8 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         try {
             if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
-                String formattedDate = startTime.format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
-                String formattedTime = startTime.format(DateTimeFormatter.ofPattern("hh:mm a"));
+                String formattedDate = appointmentDTO.getAppointmentDateTime().format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
+                String formattedTime = appointmentDTO.getAppointmentDateTime().format(DateTimeFormatter.ofPattern("hh:mm a"));
 
                 emailService.sendAppointmentBooked(
                         appointmentDTO.getPatientEmail(),
@@ -113,6 +110,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         return convertToDTO(saved);
     }
+
+
+
 
 
     @Override
