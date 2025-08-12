@@ -57,9 +57,9 @@ public class AppointmentController {
         return ResponseEntity.ok(createdAppointment);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<AppointmentDTO> getAppointmentById(@PathVariable String id) {
-        return ResponseEntity.ok(appointmentService.getAppointmentById(id));
+    @GetMapping("/{appointmentId}")
+    public ResponseEntity<AppointmentDTO> getAppointmentById(@PathVariable String appointmentId) {
+        return ResponseEntity.ok(appointmentService.getAppointmentById(appointmentId));
     }
 
     @GetMapping
@@ -67,10 +67,10 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.getAllAppointments());
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{appointmentId}")
     public ResponseEntity<AppointmentDTO> updateAppointment(
-            @PathVariable String id, @RequestBody AppointmentDTO appointmentDTO) {
-        AppointmentDTO updatedAppointment = appointmentService.updateAppointment(id, appointmentDTO);
+            @PathVariable String appointmentId, @RequestBody AppointmentDTO appointmentDTO) {
+        AppointmentDTO updatedAppointment = appointmentService.updateAppointment(appointmentId, appointmentDTO);
 
         if ("CONFIRMED".equalsIgnoreCase(updatedAppointment.getStatus())) {
             try {
