@@ -212,4 +212,7 @@ public class Appointment {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+    public void setCancellationReason(String reason) {
+    }
 }

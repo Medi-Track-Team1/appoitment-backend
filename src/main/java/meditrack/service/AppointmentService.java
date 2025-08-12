@@ -21,7 +21,7 @@ public interface AppointmentService {
     List<AppointmentDTO> getAppointmentHistoryByDoctor(String doctorId);
     StatsDTO getAppointmentStats();
     //    List<AppointmentDTO> getEmergencyAppointments();
-    void cancelAppointment(String appointmentId);
+//    void cancelAppointment(String appointmentId);
 
     //    void deleteAppointment(String appointmentId);
     Appointment confirmAppointment(String appointmentId);
@@ -35,6 +35,5 @@ public interface AppointmentService {
     boolean deleteAppointmentById(String appointmentId);
 
 
-
-
+    void cancelAppointment(String appointmentId, String reason);
 }

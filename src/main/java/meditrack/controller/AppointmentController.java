@@ -59,7 +59,8 @@ public class AppointmentController {
 
     @GetMapping("/{appointmentId}")
     public ResponseEntity<AppointmentDTO> getAppointmentById(@PathVariable String appointmentId) {
-        return ResponseEntity.ok(appointmentService.getAppointmentById(appointmentId));
+        return ResponseEntity.ok(appointmentService.getAppointmentById(appointmentId
+        ));
     }
 
     @GetMapping
@@ -106,29 +107,32 @@ public class AppointmentController {
         }
     }
 
-    // ✅ FIXED: Cancel appointment (UPDATE status to CANCELED, don't delete)
+    // ✅ Cancel appointment with reason (status updated to CANCELLED, not deleted)
     @PutMapping("/cancel/{appointmentId}")
-    public ResponseEntity<AppointmentDTO> cancelAppointment(@PathVariable String appointmentId) {
+    public ResponseEntity<AppointmentDTO> cancelAppointment(
+            @PathVariable String appointmentId,
+            @RequestParam String reason) {  // Admin provides reason
         try {
-            logger.info("Cancelling appointment: {}", appointmentId);
+            logger.info("Cancelling appointment: {} | Reason: {}", appointmentId, reason);
 
             // Get appointment details before canceling (for email)
             AppointmentDTO appointment = appointmentService.getAppointmentById(appointmentId);
 
-            // Cancel the appointment (updates status to CANCELED)
-            appointmentService.cancelAppointment(appointmentId);
+            // Cancel the appointment and save reason in DB
+            appointmentService.cancelAppointment(appointmentId, reason);
 
-            // Get the updated appointment to return
+            // Get updated appointment to return in response
             AppointmentDTO canceledAppointment = appointmentService.getAppointmentById(appointmentId);
 
-            // Send cancellation email
+            // Send cancellation email with reason
             try {
                 emailService.sendAppointmentCancellation(
                         appointment.getPatientEmail(),
                         appointment.getPatientName(),
                         appointment.getDoctorName(),
                         appointment.getAppointmentDateTime().toLocalDate().toString(),
-                        appointment.getAppointmentDateTime().toLocalTime().toString()
+                        appointment.getAppointmentDateTime().toLocalTime().toString(),
+                        reason // ✅ Pass reason to email
                 );
             } catch (Exception emailError) {
                 logger.warn("Failed to send cancellation email: {}", emailError.getMessage());
@@ -144,6 +148,7 @@ public class AppointmentController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+
 
     @PostMapping("/{appointmentId}/reschedule")
     public ResponseEntity<AppointmentDTO> rescheduleAppointment(
