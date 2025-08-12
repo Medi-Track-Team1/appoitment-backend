@@ -145,11 +145,11 @@ public class AppointmentController {
         }
     }
 
-    @PostMapping("/{id}/reschedule")
+    @PostMapping("/{appointmentId}/reschedule")
     public ResponseEntity<AppointmentDTO> rescheduleAppointment(
-            @PathVariable String id, @RequestParam LocalDateTime newDateTime) {
+            @PathVariable String appointmentId, @RequestParam LocalDateTime newDateTime) {
         try {
-            AppointmentDTO rescheduledAppointment = appointmentService.rescheduleAppointment(id, newDateTime);
+            AppointmentDTO rescheduledAppointment = appointmentService.rescheduleAppointment(appointmentId, newDateTime);
 
             try {
                 emailService.sendAppointmentReschedule(
@@ -165,7 +165,7 @@ public class AppointmentController {
 
             return ResponseEntity.ok(rescheduledAppointment);
         } catch (ResourceNotFoundException e) {
-            logger.error("Appointment not found: {}", id);
+            logger.error("Appointment not found: {}", appointmentId);
             return ResponseEntity.notFound().build();
         } catch (Exception e) {
             logger.error("Error rescheduling appointment: {}", e.getMessage());
