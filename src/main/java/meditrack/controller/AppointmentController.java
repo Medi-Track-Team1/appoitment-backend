@@ -257,4 +257,4 @@ public class AppointmentController {
     public ResponseEntity<List<AppointmentDTO>> getCompletedAppointmentsByPatient(@PathVariable String patientId) {
         return ResponseEntity.ok(appointmentService.getCompletedAppointmentsByPatient(patientId));
     }
-}
+

@@ -1,3 +1,4 @@
+
 package meditrack.config;//// Create this file: src/main/java/meditrack/config/CorsConfig.java
 //
 //package meditrack.config;
@@ -63,3 +64,4 @@ public class CorsConfig implements WebMvcConfigurer {
 //                .maxAge(3600);
 //    }
 //}
+

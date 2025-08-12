@@ -5,6 +5,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Document(collection = "appointments")
 public class Appointment {
@@ -36,16 +37,18 @@ public class Appointment {
     private LocalDateTime updatedAt;
 
     public Appointment() {
+
     }
 
     public Appointment(String id, String patientId, String doctorId, String appointmentId, String patientName, int age, String phoneNumber,
                        String doctorName, String department, String patientEmail, LocalDateTime appointmentDateTime,
                        Integer duration, String reason, String symptoms, String additionalNotes, AppointmentStatus status, // ✅ fixed
                        LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this();
         this.id = id;
         this.patientId = patientId;
         this.doctorId = doctorId;
-        this.appointmentId = appointmentId;
+        this.appointmentId=appointmentId;
         this.patientName = patientName;
         this.age = age;
         this.phoneNumber = phoneNumber;
@@ -63,7 +66,8 @@ public class Appointment {
     }
 
 
-    // Getters and Setters
+
+
 
     public String getAppointmentId() {
         return appointmentId;
