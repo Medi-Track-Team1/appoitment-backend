@@ -9,8 +9,10 @@ import meditrack.model.Appointment;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -78,4 +80,8 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
     Boolean existsOverlappingAppointment(String patientId, String doctorId, LocalDateTime requestedStart, LocalDateTime requestedEnd);
 
     boolean existsByPatientIdAndDoctorIdAndAppointmentDateTime(String patientId, String doctorId, LocalDateTime appointmentDateTime);
+
+    @Query("SELECT a FROM Appointment a WHERE a.doctorId = :doctorId AND FUNCTION('DATE', a.appointmentDateTime) = :date")
+    List<Appointment> findByDoctorIdAndDate(@Param("doctorId") String doctorId, @Param("date") LocalDate date);
+
 }

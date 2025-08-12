@@ -16,6 +16,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -65,18 +66,30 @@ public class AppointmentServiceImpl implements AppointmentService {
         Doctor doctor = doctorRepository.findByDoctorId(appointmentDTO.getDoctorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found with id: " + appointmentDTO.getDoctorId()));
 
-        // Check if exact appointment time already booked by this patient for this doctor
-        boolean conflictExists = appointmentRepository.existsByPatientIdAndDoctorIdAndAppointmentDateTime(
-                appointmentDTO.getPatientId(),
-                appointmentDTO.getDoctorId(),
-                appointmentDTO.getAppointmentDateTime());
+        LocalDateTime requestedStart = appointmentDTO.getAppointmentDateTime();
+        int requestedDuration = appointmentDTO.getDuration(); // in minutes
+        LocalDateTime requestedEnd = requestedStart.plusMinutes(requestedDuration);
 
-        if (conflictExists) {
-            throw new ValidationException("This exact time slot is already booked.");
+        // Fetch all existing appointments for this doctor on the requested date
+        LocalDate requestedDate = requestedStart.toLocalDate();
+        List<Appointment> existingAppointments = appointmentRepository.findByDoctorIdAndDate(doctor.getDoctorId(), requestedDate);
+
+        // Check conflicts considering 30-min buffer after existing appointments
+        for (Appointment existing : existingAppointments) {
+            LocalDateTime existingStart = existing.getAppointmentDateTime();
+            LocalDateTime existingEnd = existingStart.plusMinutes(existing.getDuration());
+
+            // 30-minute buffer after existing appointment
+            LocalDateTime bufferEnd = existingEnd.plusMinutes(30);
+
+            // Conflict if requestedStart < bufferEnd AND requestedEnd > existingStart
+            if (requestedStart.isBefore(bufferEnd) && requestedEnd.isAfter(existingStart)) {
+                String suggestedTime = bufferEnd.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                throw new ValidationException("This slot is already booked. Please book after " + suggestedTime);
+            }
         }
 
-
-        // Proceed to save appointment
+        // No conflict found, proceed to save appointment
         Appointment appointment = modelMapper.map(appointmentDTO, Appointment.class);
         appointment.setAppointmentId(generateAppointmentId());
         appointment.setPatientId(appointmentDTO.getPatientId());
