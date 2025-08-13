@@ -15,7 +15,4 @@ public interface EmailService {
             String reason);
 
     void sendAppointmentReschedule(String toEmail, String patientName, String doctorName, String newDate, String newTime);
-
-    void sendAppointmentRevisit(String to, String patientName, String date, String time, String reason);
-
 }

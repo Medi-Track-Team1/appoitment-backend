@@ -6,6 +6,5 @@ public enum AppointmentStatus {
     COMPLETED,
     CANCELLED,
     RESCHEDULED,
-    PENDING,
-    REVISIT
+    PENDING
 }
