@@ -36,4 +36,6 @@ public interface AppointmentService {
 
 
     void cancelAppointment(String appointmentId, String reason);
+    AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason);
+
 }

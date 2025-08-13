@@ -124,4 +124,31 @@ public class EmailServiceImpl implements EmailService {
         sendEmail(to, subject, body);
     }
 
+    @Override
+    public void sendAppointmentRevisit(
+            String to,
+            String patientName,
+            String date,
+            String time,
+            String reason) {
+
+        String subject = "Appointment Revisit Confirmation – MediTrack";
+
+        String body = "Dear " + patientName + ",\n\n"
+                + "We are confirming your revisit appointment details:\n\n"
+                + "📅 Date: " + date + "\n"
+                + "⏰ Time: " + time + "\n"
+                + "📝 Reason: " + reason + "\n\n"
+                + "Please arrive at least 10 minutes early.\n"
+                + "If you need to reschedule or cancel, contact us at 8610260854 or reply to this email.\n\n"
+                + "Thank you for choosing MediTrack for your healthcare needs.\n\n"
+                + "Warm Regards,\n"
+                + "MediTrack Team\n"
+                + "Phone: 8610260854\n"
+                + "Email: meditrackhealthinfo@gmail.com";
+
+        sendEmail(to, subject, body);
+    }
+
+
 }

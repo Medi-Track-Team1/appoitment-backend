@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @RestController
@@ -262,4 +264,55 @@ public class AppointmentController {
     public ResponseEntity<List<AppointmentDTO>> getCompletedAppointmentsByPatient(@PathVariable String patientId) {
         return ResponseEntity.ok(appointmentService.getCompletedAppointmentsByPatient(patientId));
     }
+
+
+    // ✅ Revisit appointment with new date/time and reason
+    @PutMapping("/revisit/{appointmentId}")
+    public ResponseEntity<AppointmentDTO> revisitAppointment(
+            @PathVariable String appointmentId,
+            @RequestParam String reason,
+            @RequestParam String newDate,    // Format: yyyy-MM-dd
+            @RequestParam String newTime) {  // Format: HH:mm
+        try {
+            logger.info("Revisiting appointment: {} | Reason: {} | New Date: {} | New Time: {}", appointmentId, reason, newDate, newTime);
+
+            // Get existing appointment before update (for email)
+            AppointmentDTO existingAppointment = appointmentService.getAppointmentById(appointmentId);
+
+            // Parse date and time
+            LocalDate date = LocalDate.parse(newDate);
+            LocalTime time = LocalTime.parse(newTime);
+            LocalDateTime newDateTime = LocalDateTime.of(date, time);
+
+            // Call service to update date, time, and reason
+            appointmentService.revisitAppointment(appointmentId, newDateTime, reason);
+
+            // Get updated appointment
+            AppointmentDTO updatedAppointment = appointmentService.getAppointmentById(appointmentId);
+
+            // Send email notification
+            try {
+                emailService.sendAppointmentRevisit(
+                        existingAppointment.getPatientEmail(),
+                        existingAppointment.getPatientName(),
+                        existingAppointment.getAppointmentDateTime().toLocalDate().toString(),
+                        existingAppointment.getAppointmentDateTime().toLocalTime().toString(),
+                        reason
+                );
+
+            } catch (Exception emailError) {
+                logger.warn("Failed to send revisit email: {}", emailError.getMessage());
+            }
+
+            return ResponseEntity.ok(updatedAppointment);
+
+        } catch (ResourceNotFoundException e) {
+            logger.error("Appointment not found: {}", appointmentId);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Error revisiting appointment {}: {}", appointmentId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
 }
