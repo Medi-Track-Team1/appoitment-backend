@@ -183,6 +183,38 @@ public class AppointmentServiceImpl implements AppointmentService {
         logger.info("Appointment {} successfully cancelled", appointmentId);
     }
 
+    @Override
+    public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
+        // 1. Fetch existing appointment
+        Appointment existingAppointment = appointmentRepository.findByAppointmentId(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found: " + appointmentId));
+
+        // 2. Update date/time and reason
+        existingAppointment.setAppointmentDateTime(newDateTime);
+        existingAppointment.setReason(reason);
+        existingAppointment.setStatus(AppointmentStatus.REVISIT); // or your desired status
+
+        // 3. Save updated appointment
+        Appointment updatedAppointment = appointmentRepository.save(existingAppointment);
+
+        // 4. Send email to patient
+        try {
+            emailService.sendAppointmentRevisit(
+                    updatedAppointment.getPatientEmail(),
+                    updatedAppointment.getPatientName(),
+                    updatedAppointment.getAppointmentDateTime().toLocalDate().toString(),
+                    updatedAppointment.getAppointmentDateTime().toLocalTime().toString(),
+                    reason
+            );
+        } catch (Exception e) {
+            logger.warn("Failed to send revisit email: {}", e.getMessage());
+        }
+
+        // 5. Convert to DTO and return
+        return convertToDTO(updatedAppointment);
+    }
+
+
 
     @Override
     public AppointmentDTO markCompleted(String appointmentId) {
