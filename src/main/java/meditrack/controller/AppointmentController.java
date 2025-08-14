@@ -2,12 +2,14 @@ package meditrack.controller;
 
 import meditrack.dto.AppointmentDTO;
 import meditrack.dto.StatsDTO;
+import meditrack.exception.SlotUnavailableException;
 import meditrack.model.Appointment;
 import meditrack.service.AppointmentService;
 import meditrack.service.EmailService;
 import meditrack.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
@@ -16,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @RestController
@@ -32,31 +35,47 @@ public class AppointmentController {
         this.emailService = emailService;
     }
 
-    @PostMapping
-    public ResponseEntity<AppointmentDTO> createAppointment(@RequestBody AppointmentDTO appointmentDTO) {
-        AppointmentDTO createdAppointment = appointmentService.createAppointment(appointmentDTO);
 
+//    @PostMapping("/create")
+@PostMapping(value = "/create", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_PLAIN_VALUE})
 
+public ResponseEntity<?> createAppointment(@RequestBody AppointmentDTO appointmentDTO) {
         try {
-            if (createdAppointment.getPatientEmail() != null &&
-                    createdAppointment.getPatientName() != null &&
-                    createdAppointment.getDoctorName() != null &&
-                    createdAppointment.getAppointmentDateTime() != null) {
-
-                emailService.sendAppointmentBooked(
-                        createdAppointment.getPatientEmail(),
-                        createdAppointment.getPatientName(),
-                        createdAppointment.getDoctorName(),
-                        createdAppointment.getAppointmentDateTime().toLocalDate().toString(),
-                        createdAppointment.getAppointmentDateTime().toLocalTime().toString()
-                );
+            // Validate required fields
+            if (appointmentDTO.getPatientId() == null || appointmentDTO.getDoctorId() == null ||
+                    appointmentDTO.getAppointmentDateTime() == null) {
+                return ResponseEntity.badRequest()
+                        .body("Patient ID, Doctor ID, and Appointment Date/Time are required.");
             }
+
+            AppointmentDTO savedAppointment = appointmentService.createAppointment(appointmentDTO);
+
+            // Format for email
+            LocalDateTime dateTime = savedAppointment.getAppointmentDateTime();
+            String date = dateTime.toLocalDate().toString();
+            String time = dateTime.toLocalTime().toString();
+
+            // Send confirmation email
+            emailService.sendAppointmentBooked(
+                    savedAppointment.getPatientEmail(),
+                    savedAppointment.getPatientName(),
+                    savedAppointment.getDoctorName(),
+                    date,
+                    time
+            );
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(savedAppointment);
+
+        } catch (SlotUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (Exception e) {
-            logger.error("Error sending appointment booking email: {}", e.getMessage());
+            e.printStackTrace(); // log for debugging
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("An error occurred while creating the appointment: " + e.getMessage());
         }
 
-        return ResponseEntity.ok(createdAppointment);
     }
+
 
     @GetMapping("/{appointmentId}")
     public ResponseEntity<AppointmentDTO> getAppointmentById(@PathVariable String appointmentId) {

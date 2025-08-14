@@ -11,6 +11,7 @@ public class Doctor {
 
     private String doctorId; // Custom ID like DOC-1001
     private String fullName;
+    private String doctorName;
     private String specialization;
     private List<String> qualifications;
     private String department;
@@ -98,5 +99,9 @@ public class Doctor {
 
     public void setWorkingHours(String workingHours) {
         this.workingHours = workingHours;
+    }
+
+    public String getDoctorName() {
+        return doctorName;
     }
 }

@@ -61,35 +61,41 @@ public class AppointmentServiceImpl implements AppointmentService {
         logger.info("Creating appointment for patientId: {}", appointmentDTO.getPatientId());
 
         Patient patient = patientRepository.findByPatientId(appointmentDTO.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found with id: " + appointmentDTO.getPatientId()));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Patient not found with id: " + appointmentDTO.getPatientId()));
 
         Doctor doctor = doctorRepository.findByDoctorId(appointmentDTO.getDoctorId())
-                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found with id: " + appointmentDTO.getDoctorId()));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Doctor not found with id: " + appointmentDTO.getDoctorId()));
 
         LocalDateTime requestedStart = appointmentDTO.getAppointmentDateTime();
         int requestedDuration = appointmentDTO.getDuration(); // in minutes
         LocalDateTime requestedEnd = requestedStart.plusMinutes(requestedDuration);
 
-        // Fetch all existing appointments for this doctor on the requested date
+        // Fetch existing appointments for THIS doctor only, on the same date
         LocalDate requestedDate = requestedStart.toLocalDate();
-        List<Appointment> existingAppointments = appointmentRepository.findByDoctorIdAndDate(doctor.getDoctorId(), requestedDate);
+        List<Appointment> existingAppointments =
+                appointmentRepository.findByDoctorIdAndDate(doctor.getDoctorId(), requestedDate);
 
-        // Check conflicts considering 30-min buffer after existing appointments
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
         for (Appointment existing : existingAppointments) {
             LocalDateTime existingStart = existing.getAppointmentDateTime();
             LocalDateTime existingEnd = existingStart.plusMinutes(existing.getDuration());
 
-            // 30-minute buffer after existing appointment
+            // Add 30-minute buffer after existing appointment
             LocalDateTime bufferEnd = existingEnd.plusMinutes(30);
 
             // Conflict if requestedStart < bufferEnd AND requestedEnd > existingStart
             if (requestedStart.isBefore(bufferEnd) && requestedEnd.isAfter(existingStart)) {
-                String suggestedTime = bufferEnd.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-                throw new ValidationException("This slot is already booked. Please book after " + suggestedTime);
+                String suggestedTime = bufferEnd.format(formatter);
+                throw new ValidationException("Doctor " + doctor.getDoctorName()
+                        + " already has an appointment at this time. "
+                        + "Please choose a slot after " + suggestedTime);
             }
         }
 
-        // No conflict found, proceed to save appointment
+        // No conflict → save appointment
         Appointment appointment = modelMapper.map(appointmentDTO, Appointment.class);
         appointment.setAppointmentId(generateAppointmentId());
         appointment.setPatientId(appointmentDTO.getPatientId());
@@ -104,10 +110,13 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment saved = appointmentRepository.save(appointment);
         logger.info("Appointment created with ID: {}", saved.getAppointmentId());
 
+        // Send email if patient has email
         try {
             if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
-                String formattedDate = appointmentDTO.getAppointmentDateTime().format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
-                String formattedTime = appointmentDTO.getAppointmentDateTime().format(DateTimeFormatter.ofPattern("hh:mm a"));
+                String formattedDate = appointmentDTO.getAppointmentDateTime()
+                        .format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
+                String formattedTime = appointmentDTO.getAppointmentDateTime()
+                        .format(DateTimeFormatter.ofPattern("hh:mm a"));
 
                 emailService.sendAppointmentBooked(
                         appointmentDTO.getPatientEmail(),
@@ -123,6 +132,11 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         return convertToDTO(saved);
     }
+
+
+
+
+
 
 
 

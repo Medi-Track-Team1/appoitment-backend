@@ -136,9 +136,9 @@ public class EmailServiceImpl implements EmailService {
 
         String body = "Dear " + patientName + ",\n\n"
                 + "We are confirming your revisit appointment details:\n\n"
-                + "📅 Date: " + date + "\n"
-                + "⏰ Time: " + time + "\n"
-                + "📝 Reason: " + reason + "\n\n"
+                + "Date: " + date + "\n"
+                + "Time: " + time + "\n"
+                + "Reason: " + reason + "\n\n"
                 + "Please arrive at least 10 minutes early.\n"
                 + "If you need to reschedule or cancel, contact us at 8610260854 or reply to this email.\n\n"
                 + "Thank you for choosing MediTrack for your healthcare needs.\n\n"
