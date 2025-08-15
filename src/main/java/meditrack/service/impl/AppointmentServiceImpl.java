@@ -1,158 +1,145 @@
 package meditrack.service.impl;
 
-import meditrack.dto.AppointmentDTO;
-import meditrack.dto.StatsDTO;
-import meditrack.exception.ResourceNotFoundException;
-import meditrack.exception.ValidationException;
-import meditrack.model.Appointment;
-import meditrack.model.Doctor;
-import meditrack.model.Patient;
-import meditrack.repository.AppointmentRepository;
-import meditrack.repository.DoctorRepository;
-import meditrack.repository.PatientRepository;
-import meditrack.service.AppointmentService;
-import meditrack.service.EmailService;
+import meditrack.dto.*;
+import meditrack.enums.AppointmentStatus;
+import meditrack.exception.*;
+import meditrack.feign.*;
+import meditrack.model.*;
+import meditrack.repository.*;
+import meditrack.service.*;
 import org.modelmapper.ModelMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
-import meditrack.enums.AppointmentStatus;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Service
 public class AppointmentServiceImpl implements AppointmentService {
 
     private static final Logger logger = LoggerFactory.getLogger(AppointmentServiceImpl.class);
     private static final Random random = new Random();
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy");
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a");
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final int BUFFER_MINUTES = 30;
+    private static final int WORKING_HOUR_START = 9;
+    private static final int WORKING_HOUR_END = 17;
 
-    @Autowired
-    private AppointmentRepository appointmentRepository;
-
-    @Autowired
-    private PatientRepository patientRepository;
-
-    @Autowired
-    private DoctorRepository doctorRepository;
-
-    @Autowired
-    private EmailService emailService;
-
-    @Autowired
-    private ModelMapper modelMapper;
-
-    private String generateAppointmentId() {
-        String id;
-        do {
-            id = "APP-" + String.format("%04d", random.nextInt(1000));
-        } while (appointmentRepository.existsByAppointmentId(id));
-        return id;
-    }
+    @Autowired private AppointmentRepository appointmentRepository;
+    @Autowired private PatientRepository patientRepository;
+    @Autowired private DoctorRepository doctorRepository;
+    @Autowired private EmailService emailService;
+    @Autowired private ModelMapper modelMapper;
+    @Autowired private PatientFeign patientFeign;
+    @Autowired private DoctorServiceClient doctorFeign;
 
     @Override
     public AppointmentDTO createAppointment(AppointmentDTO appointmentDTO) {
-        logger.info("Creating appointment for patientId: {}", appointmentDTO.getPatientId());
+        logger.info("Creating appointment for patient: {}", appointmentDTO.getPatientId());
 
-        Patient patient = patientRepository.findByPatientId(appointmentDTO.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Patient not found with id: " + appointmentDTO.getPatientId()));
+        validatePatient(appointmentDTO.getPatientId());
+        DoctorDTO doctor = fetchDoctorDetails(appointmentDTO.getDoctorId());
+        validateAppointmentTime(appointmentDTO.getAppointmentDateTime(), appointmentDTO.getDuration());
+        checkForConflictingAppointments(appointmentDTO, doctor);
 
-        Doctor doctor = doctorRepository.findByDoctorId(appointmentDTO.getDoctorId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Doctor not found with id: " + appointmentDTO.getDoctorId()));
+        Appointment appointment = buildAppointmentFromDTO(appointmentDTO, doctor);
+        Appointment savedAppointment = appointmentRepository.save(appointment);
 
+        sendAppointmentConfirmationEmail(savedAppointment);
+        logger.info("Appointment created successfully with ID: {}", savedAppointment.getAppointmentId());
+
+        return convertToDTO(savedAppointment);
+    }
+
+    private DoctorDTO fetchDoctorDetails(String doctorId) {
+        DoctorDTO doctor = doctorFeign.getDoctorById(doctorId);
+        if (doctor == null) {
+            throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
+        }
+        return doctor;
+    }
+
+
+    private void validatePatient(String patientId) {
+        ApiResponse<PatientDTO> patientResponse = patientFeign.getPatientById(patientId);
+        if (patientResponse == null || !patientResponse.isSuccess() || patientResponse.getData() == null) {
+            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+        }
+    }
+
+    private void validateAppointmentTime(LocalDateTime requestedStart, int duration) {
+        LocalDateTime requestedEnd = requestedStart.plusMinutes(duration);
+
+        if (requestedStart.isBefore(LocalDateTime.now())) {
+            throw new ValidationException("Appointment time must be in the future");
+        }
+
+        if (requestedStart.getHour() < WORKING_HOUR_START || requestedEnd.getHour() >= WORKING_HOUR_END) {
+            throw new ValidationException(String.format(
+                    "Appointments must be between %dAM and %dPM", WORKING_HOUR_START, WORKING_HOUR_END));
+        }
+    }
+
+    private void checkForConflictingAppointments(AppointmentDTO appointmentDTO, DoctorDTO doctor) {
         LocalDateTime requestedStart = appointmentDTO.getAppointmentDateTime();
-        int requestedDuration = appointmentDTO.getDuration(); // in minutes
-        LocalDateTime requestedEnd = requestedStart.plusMinutes(requestedDuration);
+        LocalDateTime requestedEnd = requestedStart.plusMinutes(appointmentDTO.getDuration());
+        LocalDateTime startOfDay = requestedStart.toLocalDate().atStartOfDay();
+        LocalDateTime endOfDay = startOfDay.plusDays(1);
 
-        // Fetch existing appointments for THIS doctor only, on the same date
-        LocalDate requestedDate = requestedStart.toLocalDate();
-        List<Appointment> existingAppointments =
-                appointmentRepository.findByDoctorIdAndDate(doctor.getDoctorId(), requestedDate);
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        List<Appointment> existingAppointments = appointmentRepository
+                .findByDoctorIdAndDate(doctor.getDoctorId(), startOfDay, endOfDay);
 
         for (Appointment existing : existingAppointments) {
             LocalDateTime existingStart = existing.getAppointmentDateTime();
             LocalDateTime existingEnd = existingStart.plusMinutes(existing.getDuration());
 
-            // Add 30-minute buffer after existing appointment
-            LocalDateTime bufferEnd = existingEnd.plusMinutes(30);
+            LocalDateTime bufferStart = existingStart.minusMinutes(BUFFER_MINUTES);
+            LocalDateTime bufferEnd = existingEnd.plusMinutes(BUFFER_MINUTES);
 
-            // Conflict if requestedStart < bufferEnd AND requestedEnd > existingStart
-            if (requestedStart.isBefore(bufferEnd) && requestedEnd.isAfter(existingStart)) {
+            if (requestedStart.isBefore(bufferEnd) && requestedEnd.isAfter(bufferStart)) {
+                // Round up to the next full hour
+                if (bufferEnd.getMinute() != 0) {
+                    bufferEnd = bufferEnd.withMinute(0).plusHours(1);
+                }
+
+                // Special rule: If time is between 12:00 PM and 12:59 PM, set to exactly 1:00 PM
+                if (bufferEnd.getHour() == 12) {
+                    bufferEnd = bufferEnd.withHour(13).withMinute(0);
+                }
+
+                // Format in 12-hour AM/PM style
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy h:mm a");
                 String suggestedTime = bufferEnd.format(formatter);
-                throw new ValidationException("Doctor " + doctor.getDoctorName()
-                        + " already has an appointment at this time. "
-                        + "Please choose a slot after " + suggestedTime);
+
+                throw new ValidationException(String.format(
+                        "Doctor %s already has an appointment at this time. Please choose a slot after %s",
+                        doctor.getDoctorName(), suggestedTime));
             }
         }
+    }
 
-        // No conflict → save appointment
+    private Appointment buildAppointmentFromDTO(AppointmentDTO appointmentDTO, DoctorDTO doctor) {
         Appointment appointment = modelMapper.map(appointmentDTO, Appointment.class);
         appointment.setAppointmentId(generateAppointmentId());
-        appointment.setPatientId(appointmentDTO.getPatientId());
-        appointment.setDoctorId(appointmentDTO.getDoctorId());
-        appointment.setPatientName(appointmentDTO.getPatientName());
-        appointment.setPatientEmail(appointmentDTO.getPatientEmail());
-        appointment.setDoctorName(appointmentDTO.getDoctorName());
         appointment.setStatus(AppointmentStatus.PENDING);
         appointment.setCreatedAt(LocalDateTime.now());
         appointment.setUpdatedAt(LocalDateTime.now());
-
-        Appointment saved = appointmentRepository.save(appointment);
-        logger.info("Appointment created with ID: {}", saved.getAppointmentId());
-
-        // Send email if patient has email
-        try {
-            if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
-                String formattedDate = appointmentDTO.getAppointmentDateTime()
-                        .format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
-                String formattedTime = appointmentDTO.getAppointmentDateTime()
-                        .format(DateTimeFormatter.ofPattern("hh:mm a"));
-
-                emailService.sendAppointmentBooked(
-                        appointmentDTO.getPatientEmail(),
-                        appointmentDTO.getPatientName(),
-                        appointmentDTO.getDoctorName(),
-                        formattedDate,
-                        formattedTime
-                );
-            }
-        } catch (Exception e) {
-            logger.error("Error sending appointment email: {}", e.getMessage());
-        }
-
-        return convertToDTO(saved);
+        appointment.setDoctorName(doctor.getDoctorName());
+        return appointment;
     }
 
-
-
-
-
-
-
-
-
-
-    @Override
-    public boolean deleteAppointmentById(String appointmentId) {
-        if (appointmentRepository.existsByAppointmentId(appointmentId)) {
-            appointmentRepository.deleteByAppointmentId(appointmentId); // ✅ use this, not deleteById
-            return true;
-        }
-        return false;
+    private String generateAppointmentId() {
+        String id;
+        do {
+            id = "APP-" + String.format("%04d", random.nextInt(10000));
+        } while (appointmentRepository.existsByAppointmentId(id));
+        return id;
     }
-
-
-
 
     @Override
     public AppointmentDTO getAppointmentById(String appointmentId) {
@@ -170,227 +157,355 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     public AppointmentDTO updateAppointment(String appointmentId, AppointmentDTO appointmentDTO) {
-        Appointment existing = appointmentRepository.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
+        Appointment existing = getExistingAppointment(appointmentId);
+        DoctorDTO doctor = fetchDoctorDetails(appointmentDTO.getDoctorId());
+
+        validateAppointmentTime(appointmentDTO.getAppointmentDateTime(), appointmentDTO.getDuration());
+        checkForConflictingAppointments(appointmentDTO, doctor);
 
         modelMapper.map(appointmentDTO, existing);
         existing.setUpdatedAt(LocalDateTime.now());
+        existing.setDoctorName(doctor.getDoctorName());
+
         Appointment updated = appointmentRepository.save(existing);
         return convertToDTO(updated);
     }
 
+    private Appointment getExistingAppointment(String appointmentId) {
+        return appointmentRepository.findByAppointmentId(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
+    }
+
     @Override
     public void cancelAppointment(String appointmentId, String reason) {
-        logger.info("Cancelling appointment with ID: {} | Reason: {}", appointmentId, reason);
+        logger.info("Cancelling appointment: {}", appointmentId);
 
-        Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
-
-        // Update status
+        Appointment appointment = getExistingAppointment(appointmentId);
         appointment.setStatus(AppointmentStatus.CANCELLED);
-        appointment.setUpdatedAt(LocalDateTime.now());
-
-        // ✅ Store the cancellation reason if your entity has a field for it
         appointment.setCancellationReason(reason);
+        appointment.setUpdatedAt(LocalDateTime.now());
 
         appointmentRepository.save(appointment);
-        logger.info("Appointment {} successfully cancelled", appointmentId);
-    }
-
-    @Override
-    public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
-        // 1. Fetch existing appointment
-        Appointment existingAppointment = appointmentRepository.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found: " + appointmentId));
-
-        // 2. Update date/time and reason
-        existingAppointment.setAppointmentDateTime(newDateTime);
-        existingAppointment.setReason(reason);
-        existingAppointment.setStatus(AppointmentStatus.REVISIT); // or your desired status
-
-        // 3. Save updated appointment
-        Appointment updatedAppointment = appointmentRepository.save(existingAppointment);
-
-        // 4. Send email to patient
-        try {
-            emailService.sendAppointmentRevisit(
-                    updatedAppointment.getPatientEmail(),
-                    updatedAppointment.getPatientName(),
-                    updatedAppointment.getAppointmentDateTime().toLocalDate().toString(),
-                    updatedAppointment.getAppointmentDateTime().toLocalTime().toString(),
-                    reason
-            );
-        } catch (Exception e) {
-            logger.warn("Failed to send revisit email: {}", e.getMessage());
-        }
-
-        // 5. Convert to DTO and return
-        return convertToDTO(updatedAppointment);
-    }
-
-
-
-    @Override
-    public AppointmentDTO markCompleted(String appointmentId) {
-        logger.info("Marking appointment as completed: {}", appointmentId);
-
-        Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with appointmentId: " + appointmentId));
-
-        appointment.setStatus(AppointmentStatus.COMPLETED);
-        appointment.setUpdatedAt(LocalDateTime.now());
-        Appointment savedAppointment = appointmentRepository.save(appointment);
-
-        logger.info("Successfully marked appointment {} as completed", appointmentId);
-
-        return convertToDTO(savedAppointment);
-    }
-
-    @Override
-    public List<AppointmentDTO> getUpcomingAppointmentsByPatient(String patientId) {
-        if (!patientRepository.existsByPatientId(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
-        }
-
-        return appointmentRepository.findByPatientIdAndAppointmentDateTimeAfter(patientId, LocalDateTime.now()).stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<AppointmentDTO> getUpcomingAppointmentsByDoctor(String doctorId) {
-        if (!doctorRepository.existsByDoctorId(doctorId)) {
-            throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
-        }
-
-        return appointmentRepository.findByDoctorIdAndAppointmentDateTimeAfter(doctorId, LocalDateTime.now()).stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<AppointmentDTO> getAppointmentHistoryByDoctor(String doctorId) {
-        if (!doctorRepository.existsByDoctorId(doctorId)) {
-            throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
-        }
-
-        List<Appointment> completedAppointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.name());
-        List<Appointment> canceledAppointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.CANCELLED.name());
-        // Combine both lists
-        List<Appointment> allHistoryAppointments = new java.util.ArrayList<>(completedAppointments);
-        allHistoryAppointments.addAll(canceledAppointments);
-
-        return allHistoryAppointments.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
+        sendCancellationEmail(appointment);
+        logger.info("Appointment {} cancelled successfully", appointmentId);
     }
 
     @Override
     public AppointmentDTO rescheduleAppointment(String appointmentId, LocalDateTime newDateTime) {
-        Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
+        logger.info("Rescheduling appointment: {} to {}", appointmentId, newDateTime);
 
-        if (newDateTime.isBefore(LocalDateTime.now())) {
-            throw new ValidationException("New appointment time must be in the future.");
-        }
+        Appointment appointment = getExistingAppointment(appointmentId);
+        validateAppointmentTime(newDateTime, appointment.getDuration());
 
-        LocalDateTime endTime = newDateTime.plusMinutes(appointment.getDuration());
+        LocalDateTime newEnd = newDateTime.plusMinutes(appointment.getDuration());
         List<Appointment> conflicts = appointmentRepository
-                .findByDateTimeBetweenAndDoctorId(newDateTime, endTime, appointment.getDoctorId());
+                .findByDateTimeBetweenAndDoctorId(newDateTime, newEnd, appointment.getDoctorId())
+                .stream()
+                .filter(a -> !a.getAppointmentId().equals(appointmentId))
+                .collect(Collectors.toList());
 
-        boolean hasConflict = conflicts.stream().anyMatch(a -> !a.getAppointmentId().equals(appointmentId));
-        if (hasConflict) {
-            throw new ValidationException("Doctor has a conflicting appointment at this time.");
+        if (!conflicts.isEmpty()) {
+            throw new ValidationException("Doctor has conflicting appointments at this time");
         }
 
         appointment.setAppointmentDateTime(newDateTime);
         appointment.setStatus(AppointmentStatus.RESCHEDULED);
         appointment.setUpdatedAt(LocalDateTime.now());
 
-        return convertToDTO(appointmentRepository.save(appointment));
+        Appointment rescheduled = appointmentRepository.save(appointment);
+        sendRescheduleEmail(rescheduled);
+
+        return convertToDTO(rescheduled);
+    }
+
+    @Override
+    public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
+        logger.info("Revisiting appointment: {} at {}", appointmentId, newDateTime);
+
+        Appointment originalAppointment = getExistingAppointment(appointmentId);
+        validateAppointmentTime(newDateTime, originalAppointment.getDuration());
+
+        Appointment revisitAppointment = new Appointment();
+        modelMapper.map(originalAppointment, revisitAppointment);
+
+        revisitAppointment.setId(null);
+        revisitAppointment.setAppointmentId(generateAppointmentId());
+        revisitAppointment.setAppointmentDateTime(newDateTime);
+        revisitAppointment.setStatus(AppointmentStatus.PENDING);
+        revisitAppointment.setRevisitReason(reason);
+        revisitAppointment.setPreviousAppointmentId(appointmentId);
+        revisitAppointment.setCreatedAt(LocalDateTime.now());
+        revisitAppointment.setUpdatedAt(LocalDateTime.now());
+
+        Appointment savedAppointment = appointmentRepository.save(revisitAppointment);
+        sendRevisitEmail(savedAppointment);
+
+        return convertToDTO(savedAppointment);
+    }
+
+    @Override
+    public AppointmentDTO markCompleted(String appointmentId) {
+        logger.info("Marking appointment as completed: {}", appointmentId);
+
+        Appointment appointment = getExistingAppointment(appointmentId);
+        appointment.setStatus(AppointmentStatus.COMPLETED);
+        appointment.setUpdatedAt(LocalDateTime.now());
+
+        Appointment completed = appointmentRepository.save(appointment);
+        sendCompletionEmail(completed);
+
+        return convertToDTO(completed);
+    }
+
+    @Override
+    public List<AppointmentDTO> getUpcomingAppointmentsByPatient(String patientId) {
+        validatePatientExists(patientId);
+        return appointmentRepository
+                .findByPatientIdAndAppointmentDateTimeAfter(patientId, LocalDateTime.now())
+                .stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AppointmentDTO> getUpcomingAppointmentsByDoctor(String doctorId) {
+        validateDoctorExists(doctorId);
+        return appointmentRepository
+                .findByDoctorIdAndAppointmentDateTimeAfter(doctorId, LocalDateTime.now())
+                .stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AppointmentDTO> getAppointmentHistoryByPatient(String patientId) {
+        validatePatientExists(patientId);
+
+        List<Appointment> completed = appointmentRepository
+                .findByPatientIdAndStatus(patientId, AppointmentStatus.COMPLETED.name());
+        List<Appointment> cancelled = appointmentRepository
+                .findByPatientIdAndStatus(patientId, AppointmentStatus.CANCELLED.name());
+
+        List<Appointment> history = new ArrayList<>();
+        history.addAll(completed);
+        history.addAll(cancelled);
+
+        return history.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AppointmentDTO> getAppointmentHistoryByDoctor(String doctorId) {
+        validateDoctorExists(doctorId);
+
+        List<Appointment> completed = appointmentRepository
+                .findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.name());
+        List<Appointment> cancelled = appointmentRepository
+                .findByDoctorIdAndStatus(doctorId, AppointmentStatus.CANCELLED.name());
+
+        List<Appointment> history = new ArrayList<>();
+        history.addAll(completed);
+        history.addAll(cancelled);
+
+        return history.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
 
     @Override
     public StatsDTO getAppointmentStats() {
         StatsDTO stats = new StatsDTO();
         stats.setTotalAppointments(appointmentRepository.count());
-        stats.setConfirmedAppointments(appointmentRepository.countByStatus(AppointmentStatus.CONFIRMED.name()));
         stats.setPendingAppointments(appointmentRepository.countByStatus(AppointmentStatus.PENDING.name()));
+        stats.setConfirmedAppointments(appointmentRepository.countByStatus(AppointmentStatus.CONFIRMED.name()));
         stats.setCompletedAppointments(appointmentRepository.countByStatus(AppointmentStatus.COMPLETED.name()));
         stats.setCancelledAppointments(appointmentRepository.countByStatus(AppointmentStatus.CANCELLED.name()));
         return stats;
     }
 
     @Override
-    public Appointment confirmAppointment(String appointmentId) {
-        Appointment appointment = appointmentRepository.findByAppointmentId(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with ID: " + appointmentId));
+    public boolean deleteAppointmentById(String appointmentId) {
+        if (appointmentRepository.existsByAppointmentId(appointmentId)) {
+            appointmentRepository.deleteByAppointmentId(appointmentId);
+            logger.info("Appointment {} deleted successfully", appointmentId);
+            return true;
+        }
+        return false;
+    }
 
+    @Override
+    public Appointment confirmAppointment(String appointmentId) {
+        Appointment appointment = getExistingAppointment(appointmentId);
         appointment.setStatus(AppointmentStatus.CONFIRMED);
         appointment.setUpdatedAt(LocalDateTime.now());
 
-        appointmentRepository.save(appointment);
+        Appointment confirmed = appointmentRepository.save(appointment);
+        sendConfirmationEmail(confirmed);
 
-        // Send confirmation email
-        String email = appointment.getPatientEmail();
-        String patientName = appointment.getPatientName();
-        String doctorName = appointment.getDoctorName();
-
-        String date = appointment.getAppointmentDateTime().toLocalDate().toString();
-        String time = appointment.getAppointmentDateTime().toLocalTime().toString();
-
-        emailService.sendAppointmentConfirmation(email, patientName, doctorName, date, time);
-        return appointment;
+        return confirmed;
     }
 
     @Override
     public List<AppointmentDTO> searchAppointments(String status, String startDate, String endDate) {
-        return List.of();
+        LocalDateTime start = startDate != null ?
+                LocalDate.parse(startDate).atStartOfDay() :
+                LocalDateTime.now().minusMonths(1);
+
+        LocalDateTime end = endDate != null ?
+                LocalDate.parse(endDate).atTime(23, 59, 59) :
+                LocalDateTime.now().plusMonths(1);
+
+        if (status != null && !status.isEmpty()) {
+            return appointmentRepository
+                    .findByStatusAndAppointmentDateTimeBetween(status, start, end)
+                    .stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
+        } else {
+            return appointmentRepository
+                    .findByAppointmentDateTimeBetween(start, end)
+                    .stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
+        }
     }
 
     @Override
     public List<Appointment> findByPatientIdAndStatus(String patientId, String status) {
-        return List.of();
+        validatePatientExists(patientId);
+        return appointmentRepository.findByPatientIdAndStatus(patientId, status);
     }
 
     @Override
     public List<AppointmentDTO> getCompletedAppointmentsByDoctor(String doctorId) {
-        List<Appointment> appointments = appointmentRepository.findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.toString());
-        return appointments.stream()
+        validateDoctorExists(doctorId);
+        return appointmentRepository
+                .findByDoctorIdAndStatus(doctorId, AppointmentStatus.COMPLETED.name())
+                .stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AppointmentDTO> getCompletedAppointmentsByPatient(String patientId) {
+        validatePatientExists(patientId);
+        return appointmentRepository
+                .findByPatientIdAndStatus(patientId, AppointmentStatus.COMPLETED.name())
+                .stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    private void validatePatientExists(String patientId) {
+        if (!patientRepository.existsByPatientId(patientId)) {
+            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+        }
+    }
+
+    private void validateDoctorExists(String doctorId) {
+        if (!doctorRepository.existsByDoctorId(doctorId)) {
+            throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
+        }
+    }
+
+    private void sendAppointmentConfirmationEmail(Appointment appointment) {
+        try {
+            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+                emailService.sendAppointmentBooked(
+                        appointment.getPatientEmail(),
+                        appointment.getPatientName(),
+                        appointment.getDoctorName(),
+                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
+                        appointment.getAppointmentDateTime().format(TIME_FORMATTER)
+                );
+            }
+        } catch (Exception e) {
+            logger.error("Error sending appointment email: {}", e.getMessage());
+        }
+    }
+
+    private void sendCancellationEmail(Appointment appointment) {
+        try {
+            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+                emailService.sendAppointmentCancellation(
+                        appointment.getPatientEmail(),
+                        appointment.getPatientName(),
+                        appointment.getDoctorName(),
+                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
+                        appointment.getAppointmentDateTime().format(TIME_FORMATTER),
+                        appointment.getCancellationReason()
+                );
+            }
+        } catch (Exception e) {
+            logger.error("Error sending cancellation email: {}", e.getMessage());
+        }
+    }
+
+    private void sendRescheduleEmail(Appointment appointment) {
+        try {
+            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+                emailService.sendAppointmentRescheduled(
+                        appointment.getPatientEmail(),
+                        appointment.getPatientName(),
+                        appointment.getDoctorName(),
+                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
+                        appointment.getAppointmentDateTime().format(TIME_FORMATTER)
+                );
+            }
+        } catch (Exception e) {
+            logger.error("Error sending reschedule email: {}", e.getMessage());
+        }
+    }
+
+    private void sendRevisitEmail(Appointment appointment) {
+        try {
+            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+                emailService.sendAppointmentRevisit(
+                        appointment.getPatientEmail(),
+                        appointment.getPatientName(),
+                        appointment.getDoctorName(),
+                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
+                        appointment.getAppointmentDateTime().format(TIME_FORMATTER),
+                        appointment.getRevisitReason()
+                );
+            }
+        } catch (Exception e) {
+            logger.error("Error sending revisit email: {}", e.getMessage());
+        }
+    }
+
+    private void sendCompletionEmail(Appointment appointment) {
+        try {
+            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+                emailService.sendAppointmentCompletion(
+                        appointment.getPatientEmail(),
+                        appointment.getPatientName(),
+                        appointment.getDoctorName()
+                );
+            }
+        } catch (Exception e) {
+            logger.error("Error sending completion email: {}", e.getMessage());
+        }
+    }
+
+    private void sendConfirmationEmail(Appointment appointment) {
+        try {
+            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+                emailService.sendAppointmentConfirmation(
+                        appointment.getPatientEmail(),
+                        appointment.getPatientName(),
+                        appointment.getDoctorName(),
+                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
+                        appointment.getAppointmentDateTime().format(TIME_FORMATTER)
+                );
+            }
+        } catch (Exception e) {
+            logger.error("Error sending confirmation email: {}", e.getMessage());
+        }
     }
 
     private AppointmentDTO convertToDTO(Appointment appointment) {
         return modelMapper.map(appointment, AppointmentDTO.class);
     }
-
-    @Override
-    public List<AppointmentDTO> getAppointmentHistoryByPatient(String patientId) {
-        if (!patientRepository.existsByPatientId(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
-        }
-
-        List<Appointment> completedAppointments = appointmentRepository.findByPatientIdAndStatus(patientId, AppointmentStatus.COMPLETED.name());
-        List<Appointment> canceledAppointments = appointmentRepository.findByPatientIdAndStatus(patientId, AppointmentStatus.CANCELLED.name());
-
-        List<Appointment> allHistoryAppointments = new java.util.ArrayList<>(completedAppointments);
-        allHistoryAppointments.addAll(canceledAppointments);
-
-        return allHistoryAppointments.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-
-    @Override
-    public List<AppointmentDTO> getCompletedAppointmentsByPatient(String patientId) {
-        List<Appointment> completedAppointments = appointmentRepository
-                .findByPatientIdAndStatus(patientId, AppointmentStatus.COMPLETED.name());
-        return completedAppointments.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());}
 }
-
-
-

@@ -1,16 +1,11 @@
-
 package meditrack.repository;
 
 import meditrack.model.Appointment;
-import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,58 +14,55 @@ public interface AppointmentRepository extends MongoRepository<Appointment, Stri
 
     Optional<Appointment> findByAppointmentId(String appointmentId);
 
-    @Query("{ 'patient.$id' : ?0 }")
-    List<Appointment> findByPatientId(ObjectId patientId);
+    @Query("{ 'patientId' : ?0 }")
+    List<Appointment> findByPatientId(String patientId);
 
-    @Query("{ 'doctor.$id' : ?0 }")
-    List<Appointment> findByDoctorId(ObjectId doctorId);
-
-    @Query("{ 'patient.patientId' : ?0 }")
-    List<Appointment> findByPatient_PatientId(String patientId);
-
-    @Query("{ 'doctor.doctorId' : ?0 }")
-    List<Appointment> findByDoctor_DoctorId(String doctorId);
+    @Query("{ 'doctorId' : ?0 }")
+    List<Appointment> findByDoctorId(String doctorId);
 
     @Query("{ 'appointmentDateTime' : { $gte: ?0 }, 'status' : { $ne: 'COMPLETED' } }")
     List<Appointment> findUpcomingAppointments(LocalDateTime now);
 
-    @Query("{ 'doctor.doctorId' : ?0, 'status' : 'COMPLETED' }")
+    @Query("{ 'doctorId' : ?0, 'status' : 'COMPLETED' }")
     List<Appointment> findCompletedAppointmentsByDoctor(String doctorId);
 
-    @Query("{ 'appointmentDateTime' : { $gte: ?0, $lte: ?1 }, 'doctor.doctorId' : ?2 }")
+    @Query("{ 'appointmentDateTime' : { $gte: ?0, $lte: ?1 }, 'doctorId' : ?2 }")
     List<Appointment> findByDateTimeBetweenAndDoctorId(LocalDateTime start, LocalDateTime end, String doctorId);
 
+    @Query("{ 'doctorId' : ?0, 'appointmentDateTime' : { $gte: ?1, $lt: ?2 } }")
+    List<Appointment> findByDoctorIdAndDate(String doctorId, LocalDateTime startOfDay, LocalDateTime endOfDay);
+
+    @Query("{ 'status' : ?0 }")
     long countByStatus(String status);
 
+    @Query("{ 'patientId' : ?0, 'appointmentDateTime' : { $gt: ?1 } }")
     List<Appointment> findByPatientIdAndAppointmentDateTimeAfter(String patientId, LocalDateTime date);
+
+    @Query("{ 'doctorId' : ?0, 'appointmentDateTime' : { $gt: ?1 } }")
     List<Appointment> findByDoctorIdAndAppointmentDateTimeAfter(String doctorId, LocalDateTime date);
 
+    @Query("{ 'doctorId' : ?0, 'status' : ?1 }")
+    List<Appointment> findByDoctorIdAndStatus(String doctorId, String status);
 
-
-    List<Appointment> findByDoctorIdAndStatusIgnoreCase(String doctorId, String status);
-
-    List<Appointment> findByDoctorIdAndStatus(String doctorId, String completed);
-    List<Appointment> findByPatientIdAndStatus(String doctorId, String completed);
-//    List<Appointment> findByIsEmergency(boolean isEmergency);
+    @Query("{ 'patientId' : ?0, 'status' : ?1 }")
+    List<Appointment> findByPatientIdAndStatus(String patientId, String status);
 
     boolean existsByAppointmentId(String appointmentId);
 
     void deleteByAppointmentId(String appointmentId);
 
+    @Query("{ 'patientId': ?0, 'doctorId': ?1, " +
+            "'appointmentDateTime': { $lt: ?3 }, " +
+            "$expr: { $gt: [{ $add: ['$appointmentDateTime', { $multiply: ['$duration', 60000] }] }, ?2] } }")
+    Boolean existsOverlappingAppointment(String patientId, String doctorId,
+                                         LocalDateTime requestedStart, LocalDateTime requestedEnd);
 
-    // Check overlapping doctor appointment:
+    boolean existsByPatientIdAndDoctorIdAndAppointmentDateTime(String patientId,
+                                                               String doctorId,
+                                                               LocalDateTime appointmentDateTime);
 
-    // Check overlapping appointment for patient & doctor:
-    @Query("{ 'patient.patientId': ?0, 'doctor.doctorId': ?1, " +
-            " 'appointmentDateTime': { $lt: ?3 }, " +
-            " 'appointmentEndDateTime': { $gt: ?2 } }")
-    Boolean existsOverlappingAppointment(String patientId, String doctorId, LocalDateTime requestedStart, LocalDateTime requestedEnd);
+    // ✅ Added methods for searchAppointments()
+    List<Appointment> findByStatusAndAppointmentDateTimeBetween(String status, LocalDateTime start, LocalDateTime end);
 
-    boolean existsByPatientIdAndDoctorIdAndAppointmentDateTime(String patientId, String doctorId, LocalDateTime appointmentDateTime);
-
-
-    @Query("SELECT a FROM Appointment a WHERE a.doctorId = :doctorId AND FUNCTION('DATE', a.appointmentDateTime) = :date")
-    List<Appointment> findByDoctorIdAndDate(@Param("doctorId") String doctorId, @Param("date") LocalDate date);
-
+    List<Appointment> findByAppointmentDateTimeBetween(LocalDateTime start, LocalDateTime end);
 }
-
