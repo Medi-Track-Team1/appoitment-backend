@@ -175,9 +175,8 @@ public ResponseEntity<?> createAppointment(@RequestBody AppointmentDTO appointme
             @PathVariable String appointmentId, @RequestParam LocalDateTime newDateTime) {
         try {
             AppointmentDTO rescheduledAppointment = appointmentService.rescheduleAppointment(appointmentId, newDateTime);
-
             try {
-                emailService.sendAppointmentReschedule(
+                emailService.sendAppointmentRescheduled(
                         rescheduledAppointment.getPatientEmail(),
                         rescheduledAppointment.getPatientName(),
                         rescheduledAppointment.getDoctorName(),
@@ -185,13 +184,9 @@ public ResponseEntity<?> createAppointment(@RequestBody AppointmentDTO appointme
                         rescheduledAppointment.getAppointmentDateTime().toLocalTime().toString()
                 );
             } catch (Exception e) {
-                logger.error("Error sending reschedule email: {}", e.getMessage());
+                logger.error("Failed to send reschedule email: {}", e.getMessage());
             }
-
             return ResponseEntity.ok(rescheduledAppointment);
-        } catch (ResourceNotFoundException e) {
-            logger.error("Appointment not found: {}", appointmentId);
-            return ResponseEntity.notFound().build();
         } catch (Exception e) {
             logger.error("Error rescheduling appointment: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -313,10 +308,12 @@ public ResponseEntity<?> createAppointment(@RequestBody AppointmentDTO appointme
                 emailService.sendAppointmentRevisit(
                         existingAppointment.getPatientEmail(),
                         existingAppointment.getPatientName(),
+                        existingAppointment.getDoctorName(), // ← missing argument
                         existingAppointment.getAppointmentDateTime().toLocalDate().toString(),
                         existingAppointment.getAppointmentDateTime().toLocalTime().toString(),
                         reason
                 );
+
 
             } catch (Exception emailError) {
                 logger.warn("Failed to send revisit email: {}", emailError.getMessage());

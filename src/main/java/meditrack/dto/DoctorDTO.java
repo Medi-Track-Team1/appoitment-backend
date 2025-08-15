@@ -1,16 +1,24 @@
 package meditrack.dto;
 
-
-import lombok.Data;
-import java.util.List;
-
-@Data
 public class DoctorDTO {
-    private String id;
-    private String fullName;
-    private String specialization;
-    private List<String> qualifications;
-    private String department;
-    private String contactNumber;
-    private String email;
+    private String doctorId;
+    private String doctorName;
+    // other fields you need
+
+    // getters and setters
+    public String getDoctorId() {
+        return doctorId;
+    }
+
+    public void setDoctorId(String doctorId) {
+        this.doctorId = doctorId;
+    }
+
+    public String getDoctorName() {
+        return doctorName;
+    }
+
+    public void setDoctorName(String doctorName) {
+        this.doctorName = doctorName;
+    }
 }
