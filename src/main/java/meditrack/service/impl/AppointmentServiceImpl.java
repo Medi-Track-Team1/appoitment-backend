@@ -40,12 +40,16 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Autowired private PatientFeign patientFeign;
 
     @Autowired
-    @Qualifier("doctorServiceClient") //
+    @Qualifier("doctorServiceClient")
     private DoctorServiceClient doctorFeign;
 
     @Override
+
     public AppointmentDTO createAppointment(AppointmentDTO appointmentDTO) {
         logger.info("Creating appointment for patient: {}", appointmentDTO.getPatientId());
+
+        // Remove ALL try-catch blocks from this method
+        // Let exceptions bubble up naturally to the controller and then to GlobalExceptionHandler
 
         validatePatient(appointmentDTO.getPatientId());
         DoctorDTO doctor = fetchDoctorDetails(appointmentDTO.getDoctorId());
@@ -60,6 +64,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         return convertToDTO(savedAppointment);
     }
+
 
     private DoctorDTO fetchDoctorDetails(String doctorId) {
         try {
@@ -86,13 +91,11 @@ public class AppointmentServiceImpl implements AppointmentService {
         } catch (Exception e) {
             logger.error("Error fetching doctor with ID {}: {}", doctorId, e.getMessage());
 
-            // Check if doctor exists in local repository as fallback
             return doctorRepository.findByDoctorId(doctorId)
                     .map(d -> modelMapper.map(d, DoctorDTO.class))
                     .orElseThrow(() -> new ResourceNotFoundException("Doctor not found with id: " + doctorId));
         }
     }
-
 
     private void validatePatient(String patientId) {
         ApiResponse<PatientDTO> patientResponse = patientFeign.getPatientById(patientId);
@@ -115,41 +118,85 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private void checkForConflictingAppointments(AppointmentDTO appointmentDTO, DoctorDTO doctor) {
+        if (appointmentDTO == null || doctor == null) {
+            throw new IllegalArgumentException("AppointmentDTO and DoctorDTO must not be null");
+        }
+
         LocalDateTime requestedStart = appointmentDTO.getAppointmentDateTime();
+        if (requestedStart == null) {
+            throw new ValidationException("Appointment date/time must be specified");
+        }
+
+        // Get doctor name safely
+        String doctorName = doctor.getDoctorName() != null ?
+                doctor.getDoctorName().replace("Dr. Dr.", "Dr.") :
+                "The doctor";
+
         LocalDateTime requestedEnd = requestedStart.plusMinutes(appointmentDTO.getDuration());
         LocalDateTime startOfDay = requestedStart.toLocalDate().atStartOfDay();
-        LocalDateTime endOfDay = startOfDay.plusDays(1);
+        LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
 
         List<Appointment> existingAppointments = appointmentRepository
                 .findByDoctorIdAndDate(doctor.getDoctorId(), startOfDay, endOfDay);
 
         for (Appointment existing : existingAppointments) {
+            if (existing.getAppointmentId().equals(appointmentDTO.getAppointmentId())) {
+                continue;
+            }
+
             LocalDateTime existingStart = existing.getAppointmentDateTime();
             LocalDateTime existingEnd = existingStart.plusMinutes(existing.getDuration());
-
             LocalDateTime bufferStart = existingStart.minusMinutes(BUFFER_MINUTES);
             LocalDateTime bufferEnd = existingEnd.plusMinutes(BUFFER_MINUTES);
 
             if (requestedStart.isBefore(bufferEnd) && requestedEnd.isAfter(bufferStart)) {
-                // Round up to the next full hour
-                if (bufferEnd.getMinute() != 0) {
-                    bufferEnd = bufferEnd.withMinute(0).plusHours(1);
-                }
+                LocalDateTime suggestedTime = calculateSuggestedTime(bufferEnd);
+                String formattedTime = formatSuggestedTime(suggestedTime);
 
-                // Special rule: If time is between 12:00 PM and 12:59 PM, set to exactly 1:00 PM
-                if (bufferEnd.getHour() == 12) {
-                    bufferEnd = bufferEnd.withHour(13).withMinute(0);
-                }
+                String errorMessage = String.format(
+                        "%s is not available at this time. The next available slot is %s",
+                        doctorName,
+                        formattedTime);
 
-                // Format in 12-hour AM/PM style
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy h:mm a");
-                String suggestedTime = bufferEnd.format(formatter);
-
-                throw new ValidationException(String.format(
-                        "Doctor %s already has an appointment at this time. Please choose a slot after %s",
-                        doctor.getDoctorName(), suggestedTime));
+                logger.info("About to throw ConflictException: {}", errorMessage);
+                ConflictException conflictEx = new ConflictException(errorMessage);
+                logger.info("ConflictException created: {}", conflictEx.getClass().getName());
+                throw conflictEx;
             }
         }
+    }
+
+    private LocalDateTime calculateSuggestedTime(LocalDateTime bufferEnd) {
+        // Round up to next hour
+        bufferEnd = bufferEnd.withMinute(0).withSecond(0).withNano(0).plusHours(1);
+
+        // Special handling for noon
+        if (bufferEnd.getHour() == 12) {
+            bufferEnd = bufferEnd.withHour(13).withMinute(0);
+        }
+
+        return bufferEnd;
+    }
+
+    private String formatSuggestedTime(LocalDateTime suggestedTime) {
+        // Convert to 12-hour format for display
+        int hour = suggestedTime.getHour();
+        String amPm = "AM";
+
+        if (hour >= 12) {
+            amPm = "PM";
+            if (hour > 12) {
+                hour -= 12;
+            }
+        } else if (hour == 0) {
+            hour = 12;
+        }
+
+        return String.format("%s %d:%02d %s",
+                suggestedTime.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
+                hour,
+                suggestedTime.getMinute(),
+                amPm);
     }
 
     private Appointment buildAppointmentFromDTO(AppointmentDTO appointmentDTO, DoctorDTO doctor) {
@@ -186,18 +233,26 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     public AppointmentDTO updateAppointment(String appointmentId, AppointmentDTO appointmentDTO) {
-        Appointment existing = getExistingAppointment(appointmentId);
-        DoctorDTO doctor = fetchDoctorDetails(appointmentDTO.getDoctorId());
+        try {
+            Appointment existing = getExistingAppointment(appointmentId);
+            DoctorDTO doctor = fetchDoctorDetails(appointmentDTO.getDoctorId());
 
-        validateAppointmentTime(appointmentDTO.getAppointmentDateTime(), appointmentDTO.getDuration());
-        checkForConflictingAppointments(appointmentDTO, doctor);
+            validateAppointmentTime(appointmentDTO.getAppointmentDateTime(), appointmentDTO.getDuration());
+            checkForConflictingAppointments(appointmentDTO, doctor);
 
-        modelMapper.map(appointmentDTO, existing);
-        existing.setUpdatedAt(LocalDateTime.now());
-        existing.setDoctorName(doctor.getDoctorName());
+            modelMapper.map(appointmentDTO, existing);
+            existing.setUpdatedAt(LocalDateTime.now());
+            existing.setDoctorName(doctor.getDoctorName());
 
-        Appointment updated = appointmentRepository.save(existing);
-        return convertToDTO(updated);
+            Appointment updated = appointmentRepository.save(existing);
+            return convertToDTO(updated);
+        } catch (ConflictException | ValidationException | ResourceNotFoundException e) {
+            // Re-throw these specific exceptions so Spring can handle them with @ResponseStatus
+            throw e;
+        } catch (Exception e) {
+            logger.error("Error updating appointment: {}", e.getMessage());
+            throw new ServiceException("Failed to update appointment: " + e.getMessage());
+        }
     }
 
     private Appointment getExistingAppointment(String appointmentId) {
@@ -223,53 +278,69 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentDTO rescheduleAppointment(String appointmentId, LocalDateTime newDateTime) {
         logger.info("Rescheduling appointment: {} to {}", appointmentId, newDateTime);
 
-        Appointment appointment = getExistingAppointment(appointmentId);
-        validateAppointmentTime(newDateTime, appointment.getDuration());
+        try {
+            Appointment appointment = getExistingAppointment(appointmentId);
+            validateAppointmentTime(newDateTime, appointment.getDuration());
 
-        LocalDateTime newEnd = newDateTime.plusMinutes(appointment.getDuration());
-        List<Appointment> conflicts = appointmentRepository
-                .findByDateTimeBetweenAndDoctorId(newDateTime, newEnd, appointment.getDoctorId())
-                .stream()
-                .filter(a -> !a.getAppointmentId().equals(appointmentId))
-                .collect(Collectors.toList());
+            LocalDateTime newEnd = newDateTime.plusMinutes(appointment.getDuration());
+            List<Appointment> conflicts = appointmentRepository
+                    .findByDateTimeBetweenAndDoctorId(newDateTime, newEnd, appointment.getDoctorId())
+                    .stream()
+                    .filter(a -> !a.getAppointmentId().equals(appointmentId))
+                    .collect(Collectors.toList());
 
-        if (!conflicts.isEmpty()) {
-            throw new ValidationException("Doctor has conflicting appointments at this time");
+            if (!conflicts.isEmpty()) {
+                throw new ConflictException("Doctor has conflicting appointments at this time");
+            }
+
+            appointment.setAppointmentDateTime(newDateTime);
+            appointment.setStatus(AppointmentStatus.RESCHEDULED);
+            appointment.setUpdatedAt(LocalDateTime.now());
+
+            Appointment rescheduled = appointmentRepository.save(appointment);
+            sendRescheduleEmail(rescheduled);
+
+            return convertToDTO(rescheduled);
+        } catch (ConflictException | ValidationException | ResourceNotFoundException e) {
+            // Re-throw these specific exceptions so Spring can handle them with @ResponseStatus
+            throw e;
+        } catch (Exception e) {
+            logger.error("Error rescheduling appointment: {}", e.getMessage());
+            throw new ServiceException("Failed to reschedule appointment: " + e.getMessage());
         }
-
-        appointment.setAppointmentDateTime(newDateTime);
-        appointment.setStatus(AppointmentStatus.RESCHEDULED);
-        appointment.setUpdatedAt(LocalDateTime.now());
-
-        Appointment rescheduled = appointmentRepository.save(appointment);
-        sendRescheduleEmail(rescheduled);
-
-        return convertToDTO(rescheduled);
     }
 
     @Override
     public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
         logger.info("Revisiting appointment: {} at {}", appointmentId, newDateTime);
 
-        Appointment originalAppointment = getExistingAppointment(appointmentId);
-        validateAppointmentTime(newDateTime, originalAppointment.getDuration());
+        try {
+            Appointment originalAppointment = getExistingAppointment(appointmentId);
+            validateAppointmentTime(newDateTime, originalAppointment.getDuration());
 
-        Appointment revisitAppointment = new Appointment();
-        modelMapper.map(originalAppointment, revisitAppointment);
+            Appointment revisitAppointment = new Appointment();
+            modelMapper.map(originalAppointment, revisitAppointment);
 
-        revisitAppointment.setId(null);
-        revisitAppointment.setAppointmentId(generateAppointmentId());
-        revisitAppointment.setAppointmentDateTime(newDateTime);
-        revisitAppointment.setStatus(AppointmentStatus.PENDING);
-        revisitAppointment.setRevisitReason(reason);
-        revisitAppointment.setPreviousAppointmentId(appointmentId);
-        revisitAppointment.setCreatedAt(LocalDateTime.now());
-        revisitAppointment.setUpdatedAt(LocalDateTime.now());
+            revisitAppointment.setId(null);
+            revisitAppointment.setAppointmentId(generateAppointmentId());
+            revisitAppointment.setAppointmentDateTime(newDateTime);
+            revisitAppointment.setStatus(AppointmentStatus.PENDING);
+            revisitAppointment.setRevisitReason(reason);
+            revisitAppointment.setPreviousAppointmentId(appointmentId);
+            revisitAppointment.setCreatedAt(LocalDateTime.now());
+            revisitAppointment.setUpdatedAt(LocalDateTime.now());
 
-        Appointment savedAppointment = appointmentRepository.save(revisitAppointment);
-        sendRevisitEmail(savedAppointment);
+            Appointment savedAppointment = appointmentRepository.save(revisitAppointment);
+            sendRevisitEmail(savedAppointment);
 
-        return convertToDTO(savedAppointment);
+            return convertToDTO(savedAppointment);
+        } catch (ConflictException | ValidationException | ResourceNotFoundException e) {
+            // Re-throw these specific exceptions so Spring can handle them with @ResponseStatus
+            throw e;
+        } catch (Exception e) {
+            logger.error("Error creating revisit appointment: {}", e.getMessage());
+            throw new ServiceException("Failed to create revisit appointment: " + e.getMessage());
+        }
     }
 
     @Override
@@ -434,13 +505,11 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private void validateDoctorExists(String doctorId) {
         try {
-            // First try the external service
             ResponseEntity<DoctorDTO> response = doctorFeign.getDoctorById(doctorId);
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return;
             }
 
-            // Fallback to local repository
             if (!doctorRepository.existsByDoctorId(doctorId)) {
                 throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
             }
