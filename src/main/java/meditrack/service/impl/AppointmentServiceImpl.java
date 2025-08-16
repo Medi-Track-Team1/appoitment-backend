@@ -1,5 +1,6 @@
 package meditrack.service.impl;
 
+import feign.FeignException;
 import meditrack.dto.*;
 import meditrack.enums.AppointmentStatus;
 import meditrack.exception.*;
@@ -33,7 +34,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private static final int WORKING_HOUR_END = 17;
 
     @Autowired private AppointmentRepository appointmentRepository;
-    @Autowired private PatientRepository patientRepository;
+
     @Autowired private DoctorRepository doctorRepository;
     @Autowired private EmailService emailService;
     @Autowired private ModelMapper modelMapper;
@@ -498,11 +499,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private void validatePatientExists(String patientId) {
-        if (!patientRepository.existsByPatientId(patientId)) {
+        try {
+            ApiResponse<PatientDTO> response = patientFeign.getPatientById(patientId);
+
+            if (response == null || !response.isSuccess() || response.getData() == null) {
+                throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+            }
+
+        } catch (FeignException.NotFound e) {
             throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+        } catch (FeignException e) {
+            throw new RuntimeException("Unable to verify patient existence for id: " + patientId +
+                    ". Patient service unavailable: " + e.getMessage());
         }
     }
-
     private void validateDoctorExists(String doctorId) {
         try {
             ResponseEntity<DoctorDTO> response = doctorFeign.getDoctorById(doctorId);
