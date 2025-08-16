@@ -11,6 +11,8 @@ import org.modelmapper.ModelMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.time.*;
@@ -36,7 +38,10 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Autowired private EmailService emailService;
     @Autowired private ModelMapper modelMapper;
     @Autowired private PatientFeign patientFeign;
-    @Autowired private DoctorServiceClient doctorFeign;
+
+    @Autowired
+    @Qualifier("doctorServiceClient") //
+    private DoctorServiceClient doctorFeign;
 
     @Override
     public AppointmentDTO createAppointment(AppointmentDTO appointmentDTO) {
@@ -57,11 +62,35 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private DoctorDTO fetchDoctorDetails(String doctorId) {
-        DoctorDTO doctor = doctorFeign.getDoctorById(doctorId);
-        if (doctor == null) {
-            throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
+        try {
+            logger.debug("Attempting to fetch doctor with ID: {}", doctorId);
+
+            ResponseEntity<DoctorDTO> response = doctorFeign.getDoctorById(doctorId);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                DoctorDTO doctor = response.getBody();
+
+                if (doctor == null) {
+                    logger.warn("Doctor service returned null for ID: {}", doctorId);
+                    throw new ResourceNotFoundException("Doctor data not available for ID: " + doctorId);
+                }
+
+                logger.debug("Successfully fetched doctor: {}", doctor.getDoctorName());
+                return doctor;
+            }
+
+            logger.error("Doctor service returned status: {} for ID: {}",
+                    response.getStatusCode(), doctorId);
+            throw new ServiceException("Doctor service returned status: " + response.getStatusCode());
+
+        } catch (Exception e) {
+            logger.error("Error fetching doctor with ID {}: {}", doctorId, e.getMessage());
+
+            // Check if doctor exists in local repository as fallback
+            return doctorRepository.findByDoctorId(doctorId)
+                    .map(d -> modelMapper.map(d, DoctorDTO.class))
+                    .orElseThrow(() -> new ResourceNotFoundException("Doctor not found with id: " + doctorId));
         }
-        return doctor;
     }
 
 
@@ -404,8 +433,22 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private void validateDoctorExists(String doctorId) {
-        if (!doctorRepository.existsByDoctorId(doctorId)) {
-            throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
+        try {
+            // First try the external service
+            ResponseEntity<DoctorDTO> response = doctorFeign.getDoctorById(doctorId);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return;
+            }
+
+            // Fallback to local repository
+            if (!doctorRepository.existsByDoctorId(doctorId)) {
+                throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to validate doctor with service, using local repository: {}", e.getMessage());
+            if (!doctorRepository.existsByDoctorId(doctorId)) {
+                throw new ResourceNotFoundException("Doctor not found with id: " + doctorId);
+            }
         }
     }
 
