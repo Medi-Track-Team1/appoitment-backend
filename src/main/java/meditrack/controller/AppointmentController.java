@@ -23,6 +23,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/appointments")
@@ -126,9 +127,14 @@ public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody Appo
     @PutMapping("/cancel/{appointmentId}")
     public ResponseEntity<AppointmentDTO> cancelAppointment(
             @PathVariable String appointmentId,
-            @RequestParam String reason) {  // Admin provides reason
+            @RequestBody Map<String, String> payload) {  // ✅ Accept reason from JSON body
         try {
+            String reason = payload.get("reason");  // Extract reason
             logger.info("Cancelling appointment: {} | Reason: {}", appointmentId, reason);
+
+            if (reason == null || reason.trim().isEmpty()) {
+                return ResponseEntity.badRequest().build(); // ✅ Validation: reason required
+            }
 
             // Get appointment details before canceling (for email)
             AppointmentDTO appointment = appointmentService.getAppointmentById(appointmentId);
@@ -163,7 +169,6 @@ public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody Appo
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-
 
     @PostMapping("/{appointmentId}/reschedule")
     public ResponseEntity<AppointmentDTO> rescheduleAppointment(
