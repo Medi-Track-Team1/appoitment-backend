@@ -1,5 +1,6 @@
 package meditrack.controller;
 
+import jakarta.validation.Valid;
 import meditrack.dto.AppointmentDTO;
 import meditrack.dto.StatsDTO;
 import meditrack.exception.SlotUnavailableException;
@@ -15,10 +16,12 @@ import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @RestController
@@ -37,45 +40,37 @@ public class AppointmentController {
 
 
 //    @PostMapping("/create")
-@PostMapping(value = "/create", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_PLAIN_VALUE})
+@PostMapping(value = "/create", consumes = MediaType.APPLICATION_JSON_VALUE)
+public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody AppointmentDTO appointmentDTO) {
+    logger.info("Received appointment creation request for patient: {}", appointmentDTO.getPatientId());
 
-public ResponseEntity<?> createAppointment(@RequestBody AppointmentDTO appointmentDTO) {
+    // Don't catch any exceptions here - let them bubble up to GlobalExceptionHandler
+    AppointmentDTO createdAppointment = appointmentService.createAppointment(appointmentDTO);
+    return ResponseEntity.status(HttpStatus.CREATED).body(createdAppointment);
+}
+    private String fixDateTimeFormat(String dateTime) {
+        // Fix malformed date like "2025-09-20112:31:002" to "2025-09-20 11:23:10"
         try {
-            // Validate required fields
-            if (appointmentDTO.getPatientId() == null || appointmentDTO.getDoctorId() == null ||
-                    appointmentDTO.getAppointmentDateTime() == null) {
-                return ResponseEntity.badRequest()
-                        .body("Patient ID, Doctor ID, and Appointment Date/Time are required.");
+            String datePart = dateTime.substring(0, 10); // Get yyyy-MM-dd
+            String timePart = dateTime.substring(10); // Get remaining time part
+
+            // Clean up malformed time
+            timePart = timePart.replaceAll("[^0-9]", "");
+            if (timePart.length() > 6) {
+                timePart = timePart.substring(0, 6); // Take only HHmmss
             }
 
-            AppointmentDTO savedAppointment = appointmentService.createAppointment(appointmentDTO);
+            // Reconstruct with proper formatting
+            String fixedTime = String.format("%02d:%02d:%02d",
+                    Integer.parseInt(timePart.substring(0, 2)) % 24,
+                    Integer.parseInt(timePart.substring(2, 4)) % 60,
+                    Integer.parseInt(timePart.substring(4, 6)) % 60);
 
-            // Format for email
-            LocalDateTime dateTime = savedAppointment.getAppointmentDateTime();
-            String date = dateTime.toLocalDate().toString();
-            String time = dateTime.toLocalTime().toString();
-
-            // Send confirmation email
-            emailService.sendAppointmentBooked(
-                    savedAppointment.getPatientEmail(),
-                    savedAppointment.getPatientName(),
-                    savedAppointment.getDoctorName(),
-                    date,
-                    time
-            );
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(savedAppointment);
-
-        } catch (SlotUnavailableException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+            return datePart + " " + fixedTime;
         } catch (Exception e) {
-            e.printStackTrace(); // log for debugging
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("An error occurred while creating the appointment: " + e.getMessage());
+            throw new DateTimeParseException("Invalid date format", dateTime, 0);
         }
-
     }
-
 
     @GetMapping("/{appointmentId}")
     public ResponseEntity<AppointmentDTO> getAppointmentById(@PathVariable String appointmentId) {
