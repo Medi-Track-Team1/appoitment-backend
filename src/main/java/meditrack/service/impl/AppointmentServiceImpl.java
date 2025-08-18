@@ -281,6 +281,12 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         try {
             Appointment appointment = getExistingAppointment(appointmentId);
+
+            // Enhanced validation with better error messages
+            if (newDateTime.isBefore(LocalDateTime.now())) {
+                throw new ValidationException("Cannot reschedule to a past date/time");
+            }
+
             validateAppointmentTime(newDateTime, appointment.getDuration());
 
             LocalDateTime newEnd = newDateTime.plusMinutes(appointment.getDuration());
@@ -291,7 +297,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                     .collect(Collectors.toList());
 
             if (!conflicts.isEmpty()) {
-                throw new ConflictException("Doctor has conflicting appointments at this time");
+                throw new ConflictException("Doctor is not available at the requested time. Please choose another time.");
             }
 
             appointment.setAppointmentDateTime(newDateTime);
@@ -303,14 +309,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
             return convertToDTO(rescheduled);
         } catch (ConflictException | ValidationException | ResourceNotFoundException e) {
-            // Re-throw these specific exceptions so Spring can handle them with @ResponseStatus
+            // Re-throw these with clear messages
             throw e;
         } catch (Exception e) {
-            logger.error("Error rescheduling appointment: {}", e.getMessage());
-            throw new ServiceException("Failed to reschedule appointment: " + e.getMessage());
+            logger.error("Error rescheduling appointment: {}", e.getMessage(), e);
+            throw new ServiceException("Failed to reschedule appointment due to an unexpected error");
         }
     }
-
     @Override
     public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
         logger.info("Revisiting appointment: {} at {}", appointmentId, newDateTime);
