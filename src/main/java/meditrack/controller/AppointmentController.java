@@ -3,12 +3,15 @@ package meditrack.controller;
 import jakarta.validation.Valid;
 import meditrack.dto.AppointmentDTO;
 import meditrack.dto.StatsDTO;
+import meditrack.exception.ConflictException;
 import meditrack.exception.SlotUnavailableException;
+import meditrack.exception.ValidationException;
 import meditrack.model.Appointment;
 import meditrack.service.AppointmentService;
 import meditrack.service.EmailService;
 import meditrack.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -171,10 +174,14 @@ public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody Appo
     }
 
     @PostMapping("/{appointmentId}/reschedule")
-    public ResponseEntity<AppointmentDTO> rescheduleAppointment(
-            @PathVariable String appointmentId, @RequestParam LocalDateTime newDateTime) {
+    public ResponseEntity<?> rescheduleAppointment(
+            @PathVariable String appointmentId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime newDateTime) {
+
         try {
+            logger.info("Attempting to reschedule appointment {} to {}", appointmentId, newDateTime);
             AppointmentDTO rescheduledAppointment = appointmentService.rescheduleAppointment(appointmentId, newDateTime);
+
             try {
                 emailService.sendAppointmentRescheduled(
                         rescheduledAppointment.getPatientEmail(),
@@ -185,14 +192,33 @@ public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody Appo
                 );
             } catch (Exception e) {
                 logger.error("Failed to send reschedule email: {}", e.getMessage());
+                // Continue even if email fails
             }
+
             return ResponseEntity.ok(rescheduledAppointment);
+        } catch (ValidationException e) {
+            logger.warn("Validation failed for rescheduling: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Validation failed",
+                    "message", e.getMessage()
+            ));
+        } catch (ConflictException e) {
+            logger.warn("Conflict found for rescheduling: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "error", "Scheduling conflict",
+                    "message", e.getMessage()
+            ));
+        } catch (ResourceNotFoundException e) {
+            logger.warn("Appointment not found: {}", appointmentId);
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
-            logger.error("Error rescheduling appointment: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            logger.error("Unexpected error rescheduling appointment: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "error", "Internal server error",
+                    "message", "Failed to reschedule appointment"
+            ));
         }
     }
-
     @DeleteMapping("/{appointmentId}")
     public ResponseEntity<String> deleteAppointment(@PathVariable String appointmentId) {
         boolean isDeleted = appointmentService.deleteAppointmentById(appointmentId);
