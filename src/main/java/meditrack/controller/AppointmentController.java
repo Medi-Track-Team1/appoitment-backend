@@ -2,6 +2,7 @@ package meditrack.controller;
 
 import jakarta.validation.Valid;
 import meditrack.dto.AppointmentDTO;
+import meditrack.dto.RevisitRequest;
 import meditrack.dto.StatsDTO;
 import meditrack.exception.SlotUnavailableException;
 import meditrack.model.Appointment;
@@ -280,25 +281,24 @@ public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody Appo
 
 
     // ✅ Revisit appointment with new date/time and reason
-    @PutMapping("/revisit/{appointmentId}")
+    @PostMapping("/revisit/{appointmentId}")
     public ResponseEntity<AppointmentDTO> revisitAppointment(
             @PathVariable String appointmentId,
-            @RequestParam String reason,
-            @RequestParam String newDate,    // Format: yyyy-MM-dd
-            @RequestParam String newTime) {  // Format: HH:mm
+            @RequestBody RevisitRequest revisitRequest) {
         try {
-            logger.info("Revisiting appointment: {} | Reason: {} | New Date: {} | New Time: {}", appointmentId, reason, newDate, newTime);
+            logger.info("Revisiting appointment: {} | Reason: {} | New Date: {} | New Time: {}",
+                    appointmentId, revisitRequest.getReason(), revisitRequest.getNewDate(), revisitRequest.getNewTime());
 
             // Get existing appointment before update (for email)
             AppointmentDTO existingAppointment = appointmentService.getAppointmentById(appointmentId);
 
             // Parse date and time
-            LocalDate date = LocalDate.parse(newDate);
-            LocalTime time = LocalTime.parse(newTime);
+            LocalDate date = LocalDate.parse(revisitRequest.getNewDate());
+            LocalTime time = LocalTime.parse(revisitRequest.getNewTime());
             LocalDateTime newDateTime = LocalDateTime.of(date, time);
 
             // Call service to update date, time, and reason
-            appointmentService.revisitAppointment(appointmentId, newDateTime, reason);
+            appointmentService.revisitAppointment(appointmentId, newDateTime, revisitRequest.getReason());
 
             // Get updated appointment
             AppointmentDTO updatedAppointment = appointmentService.getAppointmentById(appointmentId);
@@ -308,13 +308,11 @@ public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody Appo
                 emailService.sendAppointmentRevisit(
                         existingAppointment.getPatientEmail(),
                         existingAppointment.getPatientName(),
-                        existingAppointment.getDoctorName(), // ← missing argument
+                        existingAppointment.getDoctorName(),
                         existingAppointment.getAppointmentDateTime().toLocalDate().toString(),
                         existingAppointment.getAppointmentDateTime().toLocalTime().toString(),
-                        reason
+                        revisitRequest.getReason()
                 );
-
-
             } catch (Exception emailError) {
                 logger.warn("Failed to send revisit email: {}", emailError.getMessage());
             }
