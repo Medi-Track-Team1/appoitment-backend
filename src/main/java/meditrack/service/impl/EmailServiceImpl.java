@@ -125,6 +125,10 @@ public class EmailServiceImpl implements EmailService {
                 "Dear %s,\n\nYour revisit appointment with Dr. %s is scheduled for %s at %s.\nReason: %s\n\nRegards,\nMediTrack Team",
                 patientName, doctorName, date, time, reason
         );
+
+
+
+
         sendEmail(to, subject, body);
     }
 
