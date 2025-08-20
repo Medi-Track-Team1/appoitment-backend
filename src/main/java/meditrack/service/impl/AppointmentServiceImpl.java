@@ -319,40 +319,64 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 @Override
 public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
-    Appointment original = appointmentRepository.findById(appointmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+    logger.info("Creating revisit appointment for original appointment: {}", appointmentId);
+    
+    // Find original appointment
+    Appointment original = appointmentRepository.findByAppointmentId(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("Original appointment not found"));
+
+    // ✅ FIX 1: Validate the new appointment time
+    validateAppointmentTime(newDateTime, original.getDuration());
+    
+    // ✅ FIX 2: Check for conflicts using existing doctor conflict checking
+    checkForRevisitConflicts(original.getDoctorId(), newDateTime, original.getDuration());
 
     // Create new revisit appointment
     Appointment revisit = new Appointment();
+    revisit.setAppointmentId(generateAppointmentId()); // Generate new ID
     revisit.setDoctorId(original.getDoctorId());
     revisit.setPatientId(original.getPatientId());
-    revisit.setDateTime(newDateTime);
-    revisit.setReason(reason);
+    revisit.setAppointmentDateTime(newDateTime); // Use consistent field name
+    revisit.setDuration(original.getDuration());
+    revisit.setRevisitReason(reason);
     revisit.setType("REVISIT");
-    revisit.setStatus("SCHEDULED");
+    revisit.setStatus(AppointmentStatus.PENDING);
+    revisit.setCreatedAt(LocalDateTime.now());
+    revisit.setUpdatedAt(LocalDateTime.now());
+    
+    // ✅ FIX 3: Get patient data using the same method as other appointments
+    try {
+        ApiResponse<PatientDTO> patientResponse = patientFeign.getPatientById(original.getPatientId());
+        if (patientResponse != null && patientResponse.isSuccess() && patientResponse.getData() != null) {
+            PatientDTO patient = patientResponse.getData();
+            revisit.setPatientName(patient.getPatientName());
+            revisit.setPatientEmail(patient.getEmail());
+        }
+    } catch (Exception e) {
+        logger.warn("Could not fetch patient details for revisit appointment: {}", e.getMessage());
+        // Set from original appointment if available
+        revisit.setPatientName(original.getPatientName());
+        revisit.setPatientEmail(original.getPatientEmail());
+    }
 
+    // ✅ FIX 4: Get doctor data using existing method
+    try {
+        DoctorDTO doctor = fetchDoctorDetails(original.getDoctorId());
+        revisit.setDoctorName(doctor.getDoctorName());
+    } catch (Exception e) {
+        logger.warn("Could not fetch doctor details for revisit appointment: {}", e.getMessage());
+        revisit.setDoctorName(original.getDoctorName()); // Fallback to original
+    }
+
+    // Save the new revisit appointment
     Appointment saved = appointmentRepository.save(revisit);
-
-    // Fetch doctor and patient details
-    Patient patient = patientRepository.findById(original.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
-
-    Doctor doctor = doctorRepository.findById(original.getDoctorId())
-            .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
-
-    // ✅ FIX: Send REVISIT email, not follow-up
-    emailService.sendAppointmentRevisit(
-            patient.getEmail(),
-            patient.getName(),
-            doctor.getDoctorName(),
-            newDateTime.toLocalDate().toString(),
-            newDateTime.toLocalTime().toString(),
-            reason
-    );
-
-    return AppointmentMapper.toDTO(saved);
+    
+    // ✅ FIX 5: Send email using consistent formatting (same as other methods)
+    sendRevisitEmail(saved);
+    
+    logger.info("Revisit appointment created successfully with ID: {}", saved.getAppointmentId());
+    return convertToDTO(saved);
 }
-
     // ✅ NEW: Check for revisit appointment conflicts
     private void checkForRevisitConflicts(String doctorId, LocalDateTime newDateTime, int duration) {
         LocalDateTime requestedEnd = newDateTime.plusMinutes(duration);
@@ -620,21 +644,33 @@ private void sendAppointmentConfirmationEmail(Appointment appointment) {
     }
 
     private void sendRevisitEmail(Appointment appointment) {
-        try {
-            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
-                emailService.sendAppointmentRevisit(
-                        appointment.getPatientEmail(),
-                        appointment.getPatientName(),
-                        appointment.getDoctorName(),
-                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
-                        appointment.getAppointmentDateTime().format(TIME_FORMATTER),
-                        appointment.getRevisitReason()
-                );
-            }
-        } catch (Exception e) {
-            logger.error("Error sending revisit email: {}", e.getMessage());
+    try {
+        if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+            // ✅ Use the SAME formatters as other email methods
+            String formattedDate = appointment.getAppointmentDateTime().format(DATE_FORMATTER);
+            String formattedTime = appointment.getAppointmentDateTime().format(TIME_FORMATTER_12HR);
+            
+            logger.info("Sending REVISIT email with formatted date: {} and time: {}", formattedDate, formattedTime);
+            
+            emailService.sendAppointmentRevisit(
+                    appointment.getPatientEmail(),
+                    appointment.getPatientName(),
+                    appointment.getDoctorName(),
+                    formattedDate,    // ✅ Now will be "29 Aug 2025"
+                    formattedTime,    // ✅ Now will be "01:00 PM"
+                    appointment.getRevisitReason()
+            );
+            
+            logger.info("REVISIT email sent successfully to: {}", appointment.getPatientEmail());
+        } else {
+            logger.warn("Cannot send revisit email - patient email is missing for appointment: {}", 
+                       appointment.getAppointmentId());
         }
+    } catch (Exception e) {
+        logger.error("Error sending revisit email for appointment {}: {}", 
+                    appointment.getAppointmentId(), e.getMessage(), e);
     }
+}
 
     private void sendCompletionEmail(Appointment appointment) {
         try {
