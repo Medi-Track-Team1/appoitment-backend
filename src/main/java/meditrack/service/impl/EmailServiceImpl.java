@@ -118,23 +118,32 @@ public class EmailServiceImpl implements EmailService {
         sendEmail(to, subject, body);
     }
 
-   @Override
+  @Override
 public void sendAppointmentRevisit(String to, String patientName, String doctorName, String date, String time, String reason) {
-    String subject = "Follow-Up Appointment Scheduled – MediTrack";
+    String subject = "Revisit Appointment Scheduled – MediTrack";
     String body = "Dear " + patientName + ",\n\n"
-            + "A follow-up appointment has been scheduled for you with " + doctorName + ".\n\n"
-            + "New Appointment Details:\n"
+            + "A revisit appointment has been scheduled for you with " + doctorName + " based on your previous consultation.\n\n"
+            + "Revisit Appointment Details:\n"
             + "Date: " + date + "\n"
             + "Time: " + time + "\n"
             + "Doctor: " + doctorName + "\n"
             + "Location: MediTrack Health Center\n"
-            + "Follow-up Reason: " + reason + "\n\n"
-            + "This is a new appointment created based on your previous consultation. "
-            + "Please arrive at least 15 minutes early for registration and bring any relevant medical records or test reports.\n\n"
-            + "If you need to reschedule or cancel this follow-up appointment, please contact us at 8610260854 or reply to this email at least 24 hours in advance.\n\n"
-            + "Thank you for choosing MediTrack for your continued healthcare needs.\n\n"
+            + "Purpose of Revisit: " + reason + "\n\n"
+            + "This revisit appointment is important for:\n"
+            + "- Monitoring your progress since the last visit\n"
+            + "- Reviewing test results or treatment effectiveness\n"
+            + "- Adjusting treatment plan if necessary\n"
+            + "- Addressing any new concerns or symptoms\n\n"
+            + "Please bring:\n"
+            + "- Any test reports or medical documents from your previous visit\n"
+            + "- Current medications you are taking\n"
+            + "- A list of any new symptoms or concerns\n"
+            + "- Your previous prescription (if applicable)\n\n"
+            + "Please arrive at least 15 minutes early for registration. If you need to reschedule or cancel this revisit appointment, please contact us at 8610260854 or reply to this email at least 24 hours in advance.\n\n"
+            + "We look forward to continuing your healthcare journey and ensuring your well-being.\n\n"
             + "Warm Regards,\n"
             + "MediTrack Team\n"
+            + "MediTrack Health Center\n"
             + "Phone: 8610260854\n"
             + "Email: meditrackhealthinfo@gmail.com";
     
