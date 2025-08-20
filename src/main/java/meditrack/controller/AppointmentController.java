@@ -43,16 +43,15 @@ public class AppointmentController {
         this.emailService = emailService;
     }
 
+    @PostMapping(value = "/create", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody AppointmentDTO appointmentDTO) {
+        logger.info("Received appointment creation request for patient: {}", appointmentDTO.getPatientId());
 
-//    @PostMapping("/create")
-@PostMapping(value = "/create", consumes = MediaType.APPLICATION_JSON_VALUE)
-public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody AppointmentDTO appointmentDTO) {
-    logger.info("Received appointment creation request for patient: {}", appointmentDTO.getPatientId());
+        // Don't catch any exceptions here - let them bubble up to GlobalExceptionHandler
+        AppointmentDTO createdAppointment = appointmentService.createAppointment(appointmentDTO);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdAppointment);
+    }
 
-    // Don't catch any exceptions here - let them bubble up to GlobalExceptionHandler
-    AppointmentDTO createdAppointment = appointmentService.createAppointment(appointmentDTO);
-    return ResponseEntity.status(HttpStatus.CREATED).body(createdAppointment);
-}
     private String fixDateTimeFormat(String dateTime) {
         // Fix malformed date like "2025-09-20112:31:002" to "2025-09-20 11:23:10"
         try {
@@ -79,8 +78,7 @@ public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody Appo
 
     @GetMapping("/{appointmentId}")
     public ResponseEntity<AppointmentDTO> getAppointmentById(@PathVariable String appointmentId) {
-        return ResponseEntity.ok(appointmentService.getAppointmentById(appointmentId
-        ));
+        return ResponseEntity.ok(appointmentService.getAppointmentById(appointmentId));
     }
 
     @GetMapping
@@ -127,49 +125,37 @@ public ResponseEntity<AppointmentDTO> createAppointment(@Valid @RequestBody Appo
         }
     }
 
-    // ✅ Cancel appointment with reason (status updated to CANCELLED, not deleted)
-   @PutMapping("/cancel/{appointmentId}")
-public ResponseEntity<AppointmentDTO> cancelAppointment(
-        @PathVariable String appointmentId,
-        @RequestBody Map<String, String> payload) {
-    try {
-        String reason = payload.get("reason");
-        logger.info("Cancelling appointment: {} | Reason: {}", appointmentId, reason);
+    // ✅ FIXED: Cancel appointment with reason - NO EMAIL SENDING HERE (service handles it)
+    @PutMapping("/cancel/{appointmentId}")
+    public ResponseEntity<AppointmentDTO> cancelAppointment(
+            @PathVariable String appointmentId,
+            @RequestBody Map<String, String> payload) {
+        try {
+            String reason = payload.get("reason");
+            logger.info("Cancelling appointment: {} | Reason: {}", appointmentId, reason);
 
-        if (reason == null || reason.trim().isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            if (reason == null || reason.trim().isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            // ✅ FIXED: Service handles email sending - don't send email here
+            appointmentService.cancelAppointment(appointmentId, reason);
+
+            // Get updated appointment to return in response
+            AppointmentDTO canceledAppointment = appointmentService.getAppointmentById(appointmentId);
+
+            logger.info("Appointment {} cancelled successfully", appointmentId);
+            return ResponseEntity.ok(canceledAppointment);
+
+        } catch (ResourceNotFoundException e) {
+            logger.error("Appointment not found: {}", appointmentId);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Error cancelling appointment {}: {}", appointmentId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-
-        // Cancel the appointment (email is sent from service layer)
-        appointmentService.cancelAppointment(appointmentId, reason);
-
-        // Get updated appointment to return in response
-        AppointmentDTO canceledAppointment = appointmentService.getAppointmentById(appointmentId);
-
-        // ❌ REMOVE THIS EMAIL CALL - The service already sends it
-        // try {
-        //     emailService.sendAppointmentCancellation(
-        //             appointment.getPatientEmail(),
-        //             appointment.getPatientName(),
-        //             appointment.getDoctorName(),
-        //             appointment.getAppointmentDateTime().toLocalDate().toString(),
-        //             appointment.getAppointmentDateTime().toLocalTime().toString(),
-        //             reason
-        //     );
-        // } catch (Exception emailError) {
-        //     logger.warn("Failed to send cancellation email: {}", emailError.getMessage());
-        // }
-
-        return ResponseEntity.ok(canceledAppointment);
-
-    } catch (ResourceNotFoundException e) {
-        logger.error("Appointment not found: {}", appointmentId);
-        return ResponseEntity.notFound().build();
-    } catch (Exception e) {
-        logger.error("Error cancelling appointment {}: {}", appointmentId, e.getMessage());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
     }
-}
+
     @PostMapping("/{appointmentId}/reschedule")
     public ResponseEntity<?> rescheduleAppointment(
             @PathVariable String appointmentId,
@@ -216,6 +202,7 @@ public ResponseEntity<AppointmentDTO> cancelAppointment(
             ));
         }
     }
+
     @DeleteMapping("/{appointmentId}")
     public ResponseEntity<String> deleteAppointment(@PathVariable String appointmentId) {
         boolean isDeleted = appointmentService.deleteAppointmentById(appointmentId);
@@ -225,9 +212,6 @@ public ResponseEntity<AppointmentDTO> cancelAppointment(
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Appointment not found");
         }
     }
-
-
-
 
     @GetMapping("/patient/{patientId}/upcoming")
     public ResponseEntity<List<AppointmentDTO>> getUpcomingAppointmentsByPatient(@PathVariable String patientId) {
@@ -248,7 +232,6 @@ public ResponseEntity<AppointmentDTO> cancelAppointment(
     public ResponseEntity<List<AppointmentDTO>> getAppointmentHistoryByPatient(@PathVariable String patientId) {
         return ResponseEntity.ok(appointmentService.getAppointmentHistoryByPatient(patientId));
     }
-
 
     @GetMapping("/stats")
     public ResponseEntity<StatsDTO> getAppointmentStats() {
@@ -296,42 +279,44 @@ public ResponseEntity<AppointmentDTO> cancelAppointment(
     public ResponseEntity<List<AppointmentDTO>> getCompletedAppointmentsByDoctor(@PathVariable String doctorId) {
         return ResponseEntity.ok(appointmentService.getCompletedAppointmentsByDoctor(doctorId));
     }
+    
     @GetMapping("/patient/{patientId}/completed")
     public ResponseEntity<List<AppointmentDTO>> getCompletedAppointmentsByPatient(@PathVariable String patientId) {
         return ResponseEntity.ok(appointmentService.getCompletedAppointmentsByPatient(patientId));
     }
 
+    // ✅ FIXED: Create revisit appointment - NO EMAIL SENDING HERE (service handles it)
+    @PostMapping("/revisit/{appointmentId}")
+    public ResponseEntity<AppointmentDTO> createRevisitAppointment(
+            @PathVariable String appointmentId,
+            @RequestBody RevisitRequest revisitRequest) {
+        try {
+            logger.info("Creating revisit appointment for original appointment: {} | Reason: {} | New Date: {} | New Time: {}",
+                    appointmentId, revisitRequest.getReason(), revisitRequest.getNewDate(), revisitRequest.getNewTime());
 
-   @PostMapping("/revisit/{appointmentId}")
-public ResponseEntity<AppointmentDTO> createRevisitAppointment(
-        @PathVariable String appointmentId,
-        @RequestBody RevisitRequest revisitRequest) {
-    try {
-        logger.info("Creating revisit appointment for original appointment: {} | Reason: {} | New Date: {} | New Time: {}",
-                appointmentId, revisitRequest.getReason(), revisitRequest.getNewDate(), revisitRequest.getNewTime());
+            // Parse date and time
+            LocalDate date = LocalDate.parse(revisitRequest.getNewDate());
+            LocalTime time = LocalTime.parse(revisitRequest.getNewTime());
+            LocalDateTime newDateTime = LocalDateTime.of(date, time);
 
-        // Parse date and time
-        LocalDate date = LocalDate.parse(revisitRequest.getNewDate());
-        LocalTime time = LocalTime.parse(revisitRequest.getNewTime());
-        LocalDateTime newDateTime = LocalDateTime.of(date, time);
+            // ✅ FIXED: Service handles email sending - don't send email here
+            AppointmentDTO newRevisitAppointment = appointmentService.revisitAppointment(appointmentId, newDateTime, revisitRequest.getReason());
 
-        // Create new revisit appointment (email sent from service layer)
-        AppointmentDTO newRevisitAppointment = appointmentService.revisitAppointment(appointmentId, newDateTime, revisitRequest.getReason());
+            logger.info("New revisit appointment created with ID: {}", newRevisitAppointment.getAppointmentId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(newRevisitAppointment);
 
-        logger.info("New revisit appointment created with ID: {}", newRevisitAppointment.getAppointmentId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(newRevisitAppointment);
-
-    } catch (ResourceNotFoundException e) {
-        logger.error("Original appointment not found: {}", appointmentId);
-        return ResponseEntity.notFound().build();
-    } catch (ValidationException e) {
-        logger.error("Validation failed for revisit appointment: {}", e.getMessage());
-        return ResponseEntity.badRequest().body(null);
-    } catch (ConflictException e) {
-        logger.error("Scheduling conflict for revisit appointment: {}", e.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(null);
-    } catch (Exception e) {
-        logger.error("Error creating revisit appointment for {}: {}", appointmentId, e.getMessage());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        } catch (ResourceNotFoundException e) {
+            logger.error("Original appointment not found: {}", appointmentId);
+            return ResponseEntity.notFound().build();
+        } catch (ValidationException e) {
+            logger.error("Validation failed for revisit appointment: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(null);
+        } catch (ConflictException e) {
+            logger.error("Scheduling conflict for revisit appointment: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(null);
+        } catch (Exception e) {
+            logger.error("Error creating revisit appointment for {}: {}", appointmentId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 }
