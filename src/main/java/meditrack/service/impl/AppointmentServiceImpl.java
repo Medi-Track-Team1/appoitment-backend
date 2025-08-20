@@ -333,13 +333,14 @@ public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime new
 
     Appointment saved = appointmentRepository.save(revisit);
 
-    // ✅ Send Revisit Email instead of confirmation/follow-up
+    // Fetch doctor and patient details
     Patient patient = patientRepository.findById(original.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
     Doctor doctor = doctorRepository.findById(original.getDoctorId())
             .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
+    // ✅ FIX: Send REVISIT email, not follow-up
     emailService.sendAppointmentRevisit(
             patient.getEmail(),
             patient.getName(),
@@ -351,7 +352,6 @@ public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime new
 
     return AppointmentMapper.toDTO(saved);
 }
-
 
     // ✅ NEW: Check for revisit appointment conflicts
     private void checkForRevisitConflicts(String doctorId, LocalDateTime newDateTime, int duration) {
