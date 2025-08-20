@@ -610,22 +610,29 @@ private void sendAppointmentConfirmationEmail(Appointment appointment) {
         }
     }
 
-    private void sendCancellationEmail(Appointment appointment) {
-        try {
-            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
-                emailService.sendAppointmentCancellation(
-                        appointment.getPatientEmail(),
-                        appointment.getPatientName(),
-                        appointment.getDoctorName(),
-                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
-                        appointment.getAppointmentDateTime().format(TIME_FORMATTER),
-                        appointment.getCancellationReason()
-                );
-            }
-        } catch (Exception e) {
-            logger.error("Error sending cancellation email: {}", e.getMessage());
+private void sendCancellationEmail(Appointment appointment) {
+    try {
+        if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+            // ✅ FIX: Use TIME_FORMATTER_12HR instead of TIME_FORMATTER
+            String formattedDate = appointment.getAppointmentDateTime().format(DATE_FORMATTER);
+            String formattedTime = appointment.getAppointmentDateTime().format(TIME_FORMATTER_12HR);
+            
+            logger.info("Sending cancellation email with date: {} and time: {}", formattedDate, formattedTime);
+            
+            emailService.sendAppointmentCancellation(
+                    appointment.getPatientEmail(),
+                    appointment.getPatientName(),
+                    appointment.getDoctorName(),
+                    formattedDate,    // ✅ Now: "29 Aug 2025"
+                    formattedTime,    // ✅ Now: "02:00 PM"
+                    appointment.getCancellationReason()
+            );
         }
+    } catch (Exception e) {
+        logger.error("Error sending cancellation email: {}", e.getMessage());
     }
+}
+
 
     private void sendRescheduleEmail(Appointment appointment) {
         try {
@@ -687,20 +694,26 @@ private void sendAppointmentConfirmationEmail(Appointment appointment) {
     }
 
     private void sendConfirmationEmail(Appointment appointment) {
-        try {
-            if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
-                emailService.sendAppointmentConfirmation(
-                        appointment.getPatientEmail(),
-                        appointment.getPatientName(),
-                        appointment.getDoctorName(),
-                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
-                        appointment.getAppointmentDateTime().format(TIME_FORMATTER)
-                );
-            }
-        } catch (Exception e) {
-            logger.error("Error sending confirmation email: {}", e.getMessage());
+    try {
+        if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+            // ✅ FIX: Use TIME_FORMATTER_12HR instead of TIME_FORMATTER
+            String formattedDate = appointment.getAppointmentDateTime().format(DATE_FORMATTER);
+            String formattedTime = appointment.getAppointmentDateTime().format(TIME_FORMATTER_12HR);
+            
+            logger.info("Sending confirmation email with date: {} and time: {}", formattedDate, formattedTime);
+            
+            emailService.sendAppointmentConfirmation(
+                    appointment.getPatientEmail(),
+                    appointment.getPatientName(),
+                    appointment.getDoctorName(),
+                    formattedDate,    // ✅ Now: "29 Aug 2025"
+                    formattedTime     // ✅ Now: "02:00 PM"
+            );
         }
+    } catch (Exception e) {
+        logger.error("Error sending confirmation email: {}", e.getMessage());
     }
+}
 
     private AppointmentDTO convertToDTO(Appointment appointment) {
         return modelMapper.map(appointment, AppointmentDTO.class);
