@@ -318,44 +318,40 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 @Override
-    public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
-        logger.info("Creating revisit appointment for: {} at {}", appointmentId, newDateTime);
+public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
+    Appointment original = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
 
-        try {
-            Appointment originalAppointment = getExistingAppointment(appointmentId);
-            validateAppointmentTime(newDateTime, originalAppointment.getDuration());
+    // Create new revisit appointment
+    Appointment revisit = new Appointment();
+    revisit.setDoctorId(original.getDoctorId());
+    revisit.setPatientId(original.getPatientId());
+    revisit.setDateTime(newDateTime);
+    revisit.setReason(reason);
+    revisit.setType("REVISIT");
+    revisit.setStatus("SCHEDULED");
 
-            // ✅ Check for scheduling conflicts before creating
-            checkForRevisitConflicts(originalAppointment.getDoctorId(), newDateTime, originalAppointment.getDuration());
+    Appointment saved = appointmentRepository.save(revisit);
 
-            Appointment revisitAppointment = new Appointment();
-            modelMapper.map(originalAppointment, revisitAppointment);
+    // ✅ Send Revisit Email instead of confirmation/follow-up
+    Patient patient = patientRepository.findById(original.getPatientId())
+            .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
-            revisitAppointment.setId(null);
-            revisitAppointment.setAppointmentId(generateAppointmentId());
-            revisitAppointment.setAppointmentDateTime(newDateTime);
-            revisitAppointment.setStatus(AppointmentStatus.PENDING);
-            revisitAppointment.setRevisitReason(reason);
-            revisitAppointment.setPreviousAppointmentId(appointmentId);
-            revisitAppointment.setCreatedAt(LocalDateTime.now());
-            revisitAppointment.setUpdatedAt(LocalDateTime.now());
+    Doctor doctor = doctorRepository.findById(original.getDoctorId())
+            .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
-            // ✅ FIXED: Save first, then send email ONCE
-            Appointment savedAppointment = appointmentRepository.save(revisitAppointment);
-            
-            // ✅ Send email only once with consistent time formatting
-            sendRevisitEmail(savedAppointment);
-            
-            logger.info("Revisit appointment created successfully: {}, email sent", savedAppointment.getAppointmentId());
-            return convertToDTO(savedAppointment);
-            
-        } catch (ConflictException | ValidationException | ResourceNotFoundException e) {
-            throw e;
-        } catch (Exception e) {
-            logger.error("Error creating revisit appointment: {}", e.getMessage());
-            throw new ServiceException("Failed to create revisit appointment: " + e.getMessage());
-        }
-    }
+    emailService.sendAppointmentRevisit(
+            patient.getEmail(),
+            patient.getName(),
+            doctor.getDoctorName(),
+            newDateTime.toLocalDate().toString(),
+            newDateTime.toLocalTime().toString(),
+            reason
+    );
+
+    return AppointmentMapper.toDTO(saved);
+}
+
 
     // ✅ NEW: Check for revisit appointment conflicts
     private void checkForRevisitConflicts(String doctorId, LocalDateTime newDateTime, int duration) {
