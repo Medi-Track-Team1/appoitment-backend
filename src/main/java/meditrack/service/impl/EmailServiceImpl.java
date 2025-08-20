@@ -118,20 +118,28 @@ public class EmailServiceImpl implements EmailService {
         sendEmail(to, subject, body);
     }
 
-    @Override
-    public void sendAppointmentRevisit(String to, String patientName, String doctorName, String date, String time, String reason) {
-        String subject = "Appointment Revisit Scheduled";
-        String body = String.format(
-                "Dear %s,\n\nYour revisit appointment with Dr. %s is scheduled for %s at %s.\nReason: %s\n\nRegards,\nMediTrack Team",
-                patientName, doctorName, date, time, reason
-        );
-
-
-
-
-        sendEmail(to, subject, body);
-    }
-
+   @Override
+public void sendAppointmentRevisit(String to, String patientName, String doctorName, String date, String time, String reason) {
+    String subject = "Follow-Up Appointment Scheduled – MediTrack";
+    String body = "Dear " + patientName + ",\n\n"
+            + "A follow-up appointment has been scheduled for you with " + doctorName + ".\n\n"
+            + "New Appointment Details:\n"
+            + "Date: " + date + "\n"
+            + "Time: " + time + "\n"
+            + "Doctor: " + doctorName + "\n"
+            + "Location: MediTrack Health Center\n"
+            + "Follow-up Reason: " + reason + "\n\n"
+            + "This is a new appointment created based on your previous consultation. "
+            + "Please arrive at least 15 minutes early for registration and bring any relevant medical records or test reports.\n\n"
+            + "If you need to reschedule or cancel this follow-up appointment, please contact us at 8610260854 or reply to this email at least 24 hours in advance.\n\n"
+            + "Thank you for choosing MediTrack for your continued healthcare needs.\n\n"
+            + "Warm Regards,\n"
+            + "MediTrack Team\n"
+            + "Phone: 8610260854\n"
+            + "Email: meditrackhealthinfo@gmail.com";
+    
+    sendEmail(to, subject, body);
+}
 
     @Override
     public void sendAppointmentCompletion(String to, String patientName, String doctorName) {
