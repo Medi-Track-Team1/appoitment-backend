@@ -26,15 +26,16 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private static final Logger logger = LoggerFactory.getLogger(AppointmentServiceImpl.class);
     private static final Random random = new Random();
+    
+    // ✅ FIXED: Use consistent time formatting (12-hour format for emails)
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy");
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a");
+    private static final DateTimeFormatter TIME_FORMATTER_12HR = DateTimeFormatter.ofPattern("hh:mm a");
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final int BUFFER_MINUTES = 30;
     private static final int WORKING_HOUR_START = 9;
     private static final int WORKING_HOUR_END = 17;
 
     @Autowired private AppointmentRepository appointmentRepository;
-
     @Autowired private DoctorRepository doctorRepository;
     @Autowired private EmailService emailService;
     @Autowired private ModelMapper modelMapper;
@@ -45,12 +46,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private DoctorServiceClient doctorFeign;
 
     @Override
-
     public AppointmentDTO createAppointment(AppointmentDTO appointmentDTO) {
         logger.info("Creating appointment for patient: {}", appointmentDTO.getPatientId());
-
-        // Remove ALL try-catch blocks from this method
-        // Let exceptions bubble up naturally to the controller and then to GlobalExceptionHandler
 
         validatePatient(appointmentDTO.getPatientId());
         DoctorDTO doctor = fetchDoctorDetails(appointmentDTO.getDoctorId());
@@ -261,18 +258,22 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found with id: " + appointmentId));
     }
 
-    @Override
+@Override
     public void cancelAppointment(String appointmentId, String reason) {
-        logger.info("Cancelling appointment: {}", appointmentId);
+        logger.info("Cancelling appointment: {} with reason: {}", appointmentId, reason);
 
         Appointment appointment = getExistingAppointment(appointmentId);
         appointment.setStatus(AppointmentStatus.CANCELLED);
         appointment.setCancellationReason(reason);
         appointment.setUpdatedAt(LocalDateTime.now());
 
-        appointmentRepository.save(appointment);
-        sendCancellationEmail(appointment);
-        logger.info("Appointment {} cancelled successfully", appointmentId);
+        // ✅ FIXED: Save first, then send email ONCE
+        Appointment savedAppointment = appointmentRepository.save(appointment);
+        
+        // ✅ Send email only once with consistent formatting
+        sendCancellationEmail(savedAppointment);
+        
+        logger.info("Appointment {} cancelled successfully, email sent", appointmentId);
     }
 
     @Override
@@ -316,13 +317,16 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new ServiceException("Failed to reschedule appointment due to an unexpected error");
         }
     }
-    @Override
+@Override
     public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime newDateTime, String reason) {
-        logger.info("Revisiting appointment: {} at {}", appointmentId, newDateTime);
+        logger.info("Creating revisit appointment for: {} at {}", appointmentId, newDateTime);
 
         try {
             Appointment originalAppointment = getExistingAppointment(appointmentId);
             validateAppointmentTime(newDateTime, originalAppointment.getDuration());
+
+            // ✅ Check for scheduling conflicts before creating
+            checkForRevisitConflicts(originalAppointment.getDoctorId(), newDateTime, originalAppointment.getDuration());
 
             Appointment revisitAppointment = new Appointment();
             modelMapper.map(originalAppointment, revisitAppointment);
@@ -336,16 +340,46 @@ public class AppointmentServiceImpl implements AppointmentService {
             revisitAppointment.setCreatedAt(LocalDateTime.now());
             revisitAppointment.setUpdatedAt(LocalDateTime.now());
 
+            // ✅ FIXED: Save first, then send email ONCE
             Appointment savedAppointment = appointmentRepository.save(revisitAppointment);
+            
+            // ✅ Send email only once with consistent time formatting
             sendRevisitEmail(savedAppointment);
-
+            
+            logger.info("Revisit appointment created successfully: {}, email sent", savedAppointment.getAppointmentId());
             return convertToDTO(savedAppointment);
+            
         } catch (ConflictException | ValidationException | ResourceNotFoundException e) {
-            // Re-throw these specific exceptions so Spring can handle them with @ResponseStatus
             throw e;
         } catch (Exception e) {
             logger.error("Error creating revisit appointment: {}", e.getMessage());
             throw new ServiceException("Failed to create revisit appointment: " + e.getMessage());
+        }
+    }
+
+    // ✅ NEW: Check for revisit appointment conflicts
+    private void checkForRevisitConflicts(String doctorId, LocalDateTime newDateTime, int duration) {
+        LocalDateTime requestedEnd = newDateTime.plusMinutes(duration);
+        LocalDateTime startOfDay = newDateTime.toLocalDate().atStartOfDay();
+        LocalDateTime endOfDay = startOfDay.plusDays(1).minusNanos(1);
+
+        List<Appointment> existingAppointments = appointmentRepository
+                .findByDoctorIdAndDate(doctorId, startOfDay, endOfDay);
+
+        for (Appointment existing : existingAppointments) {
+            LocalDateTime existingStart = existing.getAppointmentDateTime();
+            LocalDateTime existingEnd = existingStart.plusMinutes(existing.getDuration());
+            LocalDateTime bufferStart = existingStart.minusMinutes(BUFFER_MINUTES);
+            LocalDateTime bufferEnd = existingEnd.plusMinutes(BUFFER_MINUTES);
+
+            if (newDateTime.isBefore(bufferEnd) && requestedEnd.isAfter(bufferStart)) {
+                LocalDateTime suggestedTime = calculateSuggestedTime(bufferEnd);
+                String formattedTime = formatSuggestedTime(suggestedTime);
+                
+                throw new ConflictException(String.format(
+                    "Doctor is not available at the requested time. The next available slot is %s",
+                    formattedTime));
+            }
         }
     }
 
@@ -536,19 +570,23 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 
-    private void sendAppointmentConfirmationEmail(Appointment appointment) {
+private void sendAppointmentConfirmationEmail(Appointment appointment) {
         try {
             if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+                String formattedDate = appointment.getAppointmentDateTime().format(DATE_FORMATTER);
+                String formattedTime = appointment.getAppointmentDateTime().format(TIME_FORMATTER_12HR);
+                
                 emailService.sendAppointmentBooked(
                         appointment.getPatientEmail(),
                         appointment.getPatientName(),
                         appointment.getDoctorName(),
-                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
-                        appointment.getAppointmentDateTime().format(TIME_FORMATTER)
+                        formattedDate,
+                        formattedTime
                 );
+                logger.info("Appointment confirmation email sent to: {}", appointment.getPatientEmail());
             }
         } catch (Exception e) {
-            logger.error("Error sending appointment email: {}", e.getMessage());
+            logger.error("Error sending appointment confirmation email: {}", e.getMessage());
         }
     }
 
