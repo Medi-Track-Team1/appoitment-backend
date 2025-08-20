@@ -26,44 +26,39 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.username}")
     private String senderEmail;
 
-    @Override
-    public void sendEmail(String toEmail, String subject, String body) {
-        try {
-            // ✅ Use MimeMessage for better email delivery
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            
-            // ✅ Set proper headers to avoid spam filters
-            helper.setFrom(new InternetAddress(senderEmail, "MediTrack Health Center"));
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText(body, false); // false = plain text, true = HTML
-            
-            // ✅ Add headers to improve deliverability
-            message.setHeader("X-Priority", "3"); // Normal priority
-            message.setHeader("X-Mailer", "MediTrack-v1.0");
-            message.setHeader("Return-Path", senderEmail);
-            
-            mailSender.send(message);
-            
-            logger.info("✅ Email sent successfully to: {} with subject: {}", toEmail, subject);
-            System.out.println("✅ Email sent to: " + toEmail + " | Subject: " + subject);
+   @Override
+public void sendEmail(String toEmail, String subject, String body) {
+    try {
+        // 🔍 CRITICAL DEBUG: Log the exact content being sent
+        logger.info("=== EMAIL CONTENT DEBUG ===");
+        logger.info("To: {}", toEmail);
+        logger.info("Subject: {}", subject);
+        logger.info("Body starts with: {}", body.substring(0, Math.min(100, body.length())));
+        logger.info("Body contains 'FOLLOW-UP APPOINTMENT DETAILS': {}", body.contains("FOLLOW-UP APPOINTMENT DETAILS"));
+        logger.info("Body contains emojis: {}", body.contains("📅") || body.contains("⏰"));
+        logger.info("Body length: {} characters", body.length());
+        logger.info("===========================");
+        
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        
+        helper.setFrom(new InternetAddress(senderEmail, "MediTrack Health Center"));
+        helper.setTo(toEmail);
+        helper.setSubject(subject);
+        helper.setText(body, false); // false = plain text
+        
+        message.setHeader("X-Priority", "3");
+        message.setHeader("X-Mailer", "MediTrack-v1.0");
+        message.setHeader("Return-Path", senderEmail);
+        
+        mailSender.send(message);
+        
+        logger.info("✅ Email sent successfully to: {} with {} characters", toEmail, body.length());
 
-        } catch (MailException e) {
-            logger.error("❌ MailException - Failed to send email to {}: {}", toEmail, e.getMessage(), e);
-            System.err.println("❌ MailException - Failed to send email to " + toEmail + ": " + e.getMessage());
-            e.printStackTrace();
-        } catch (MessagingException e) {
-            logger.error("❌ MessagingException - Failed to send email to {}: {}", toEmail, e.getMessage(), e);
-            System.err.println("❌ MessagingException - Failed to send email to " + toEmail + ": " + e.getMessage());
-            e.printStackTrace();
-        } catch (Exception e) {
-            logger.error("❌ Unexpected error sending email to {}: {}", toEmail, e.getMessage(), e);
-            System.err.println("❌ Unexpected error sending email to " + toEmail + ": " + e.getMessage());
-            e.printStackTrace();
-        }
+    } catch (Exception e) {
+        logger.error("❌ Failed to send email: {}", e.getMessage(), e);
     }
-
+}
     @Override
     public void sendAppointmentBooked(String to, String patientName, String doctorName, String date, String time) {
         String subject = "📅 Appointment Booking Acknowledgement – MediTrack";
