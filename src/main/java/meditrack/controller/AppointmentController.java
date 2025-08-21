@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
+
 @RestController
 @RequestMapping("/api/appointments")
 @CrossOrigin(origins = "*") // Add CORS support if needed
@@ -251,7 +252,6 @@ public class AppointmentController {
         }
     }
 
-
     @PostMapping("/revisit/{appointmentId}")
     public ResponseEntity<?> createRevisitAppointment(
             @PathVariable String appointmentId,
@@ -289,13 +289,14 @@ public class AppointmentController {
                 ));
             }
 
-            AppointmentDTO newRevisitAppointment = appointmentService.revisitAppointment(
+            // ✅ FIX: Use different variable name to avoid conflict
+            AppointmentDTO revisitAppointment = appointmentService.revisitAppointment(
                     appointmentId, newDateTime, revisitRequest.getReason().trim());
 
             logger.info("New revisit appointment created successfully with ID: {}",
-                    newRevisitAppointment.getAppointmentId());
+                    revisitAppointment.getAppointmentId());
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(newRevisitAppointment);
+            return ResponseEntity.status(HttpStatus.CREATED).body(revisitAppointment);
 
         } catch (ResourceNotFoundException e) {
             logger.error("Original appointment not found: {}", appointmentId);
@@ -323,6 +324,7 @@ public class AppointmentController {
             ));
         }
     }
+
     // ✅ MOVED: Generic routes AFTER specific ones
     @GetMapping
     public ResponseEntity<List<AppointmentDTO>> getAllAppointments() {
