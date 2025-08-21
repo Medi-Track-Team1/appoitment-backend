@@ -27,39 +27,53 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.username}")
     private String senderEmail;
 
-   @Override
-public void sendEmail(String toEmail, String subject, String body) {
-    try {
-        // 🔍 CRITICAL DEBUG: Log the exact content being sent
-        logger.info("=== EMAIL CONTENT DEBUG ===");
-        logger.info("To: {}", toEmail);
-        logger.info("Subject: {}", subject);
-        logger.info("Body starts with: {}", body.substring(0, Math.min(100, body.length())));
-        logger.info("Body contains 'FOLLOW-UP APPOINTMENT DETAILS': {}", body.contains("FOLLOW-UP APPOINTMENT DETAILS"));
-        logger.info("Body contains emojis: {}", body.contains("📅") || body.contains("⏰"));
-        logger.info("Body length: {} characters", body.length());
-        logger.info("===========================");
-        
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-        
-        helper.setFrom(new InternetAddress(senderEmail, "MediTrack Health Center"));
-        helper.setTo(toEmail);
-        helper.setSubject(subject);
-        helper.setText(body, false); // false = plain text
-        
-        message.setHeader("X-Priority", "3");
-        message.setHeader("X-Mailer", "MediTrack-v1.0");
-        message.setHeader("Return-Path", senderEmail);
-        
-        mailSender.send(message);
-        
-        logger.info("✅ Email sent successfully to: {} with {} characters", toEmail, body.length());
+    @Override
+    public void sendEmail(String toEmail, String subject, String body) {
+        try {
+            // Validate inputs
+            if (toEmail == null || toEmail.trim().isEmpty()) {
+                logger.error("Cannot send email - recipient email is null or empty");
+                return;
+            }
 
-    } catch (Exception e) {
-        logger.error("❌ Failed to send email: {}", e.getMessage(), e);
+            if (subject == null || subject.trim().isEmpty()) {
+                logger.error("Cannot send email - subject is null or empty");
+                return;
+            }
+
+            if (body == null || body.trim().isEmpty()) {
+                logger.error("Cannot send email - body is null or empty");
+                return;
+            }
+
+            logger.info("Preparing to send email to: {} with subject: {}", toEmail, subject);
+            logger.debug("Email body length: {} characters", body.length());
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(new InternetAddress(senderEmail, "MediTrack Health Center"));
+            helper.setTo(toEmail.trim());
+            helper.setSubject(subject.trim());
+            helper.setText(body, false); // false = plain text
+
+            message.setHeader("X-Priority", "3");
+            message.setHeader("X-Mailer", "MediTrack-v1.0");
+            message.setHeader("Return-Path", senderEmail);
+
+            // Actually send the email
+            mailSender.send(message);
+
+            logger.info("Email sent successfully to: {} with subject: {}", toEmail, subject);
+
+        } catch (MessagingException e) {
+            logger.error("MessagingException while sending email to {}: {}", toEmail, e.getMessage(), e);
+        } catch (MailException e) {
+            logger.error("MailException while sending email to {}: {}", toEmail, e.getMessage(), e);
+        } catch (Exception e) {
+            logger.error("Unexpected error while sending email to {}: {}", toEmail, e.getMessage(), e);
+        }
     }
-}
     @Override
     public void sendAppointmentBooked(String to, String patientName, String doctorName, String date, String time) {
         String subject = "📅 Appointment Booking Acknowledgement – MediTrack";
