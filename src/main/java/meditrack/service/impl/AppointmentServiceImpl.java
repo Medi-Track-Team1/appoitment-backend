@@ -339,7 +339,6 @@ public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime new
     revisit.setAppointmentDateTime(newDateTime); // Use consistent field name
     revisit.setDuration(original.getDuration());
     revisit.setRevisitReason(reason);
-    revisit.setType("REVISIT");
     revisit.setStatus(AppointmentStatus.PENDING);
     revisit.setCreatedAt(LocalDateTime.now());
     revisit.setUpdatedAt(LocalDateTime.now());
@@ -349,7 +348,7 @@ public AppointmentDTO revisitAppointment(String appointmentId, LocalDateTime new
         ApiResponse<PatientDTO> patientResponse = patientFeign.getPatientById(original.getPatientId());
         if (patientResponse != null && patientResponse.isSuccess() && patientResponse.getData() != null) {
             PatientDTO patient = patientResponse.getData();
-            revisit.setPatientName(patient.getPatientName());
+            revisit.setPatientName(patient.getFullName());
             revisit.setPatientEmail(patient.getEmail());
         }
     } catch (Exception e) {
@@ -637,12 +636,18 @@ private void sendCancellationEmail(Appointment appointment) {
     private void sendRescheduleEmail(Appointment appointment) {
         try {
             if (appointment.getPatientEmail() != null && !appointment.getPatientEmail().isBlank()) {
+                // ✅ FIX: Use TIME_FORMATTER_12HR instead of TIME_FORMATTER
+                String formattedDate = appointment.getAppointmentDateTime().format(DATE_FORMATTER);
+                String formattedTime = appointment.getAppointmentDateTime().format(TIME_FORMATTER_12HR);
+
+                logger.info("Sending reschedule email with date: {} and time: {}", formattedDate, formattedTime);
+
                 emailService.sendAppointmentRescheduled(
                         appointment.getPatientEmail(),
                         appointment.getPatientName(),
                         appointment.getDoctorName(),
-                        appointment.getAppointmentDateTime().format(DATE_FORMATTER),
-                        appointment.getAppointmentDateTime().format(TIME_FORMATTER)
+                        formattedDate,    // ✅ Now: "29 Aug 2025"
+                        formattedTime     // ✅ Now: "02:00 PM"
                 );
             }
         } catch (Exception e) {
