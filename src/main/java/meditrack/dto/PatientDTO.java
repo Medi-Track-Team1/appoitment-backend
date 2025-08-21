@@ -2,9 +2,12 @@ package meditrack.dto;
 
 import lombok.Data;
 import jakarta.validation.constraints.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.List;
-
+@Getter
+@Setter
 @Data
 public class PatientDTO {
     private String patientId;
