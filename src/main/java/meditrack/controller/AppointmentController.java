@@ -256,7 +256,9 @@ public class AppointmentController {
 
 
 
+
     // ✅ FIXED: Create revisit appointment - NO EMAIL SENDING HERE (service handles it)
+
 
     @PostMapping("/revisit/{appointmentId}")
     public ResponseEntity<?> createRevisitAppointment(
@@ -296,17 +298,22 @@ public class AppointmentController {
                 ));
             }
 
-            AppointmentDTO newRevisitAppointment = appointmentService.revisitAppointment(
+            // ✅ FIX: Use different variable name to avoid conflict
+            AppointmentDTO revisitAppointment = appointmentService.revisitAppointment(
                     appointmentId, newDateTime, revisitRequest.getReason().trim());
 
             logger.info("New revisit appointment created successfully with ID: {}",
-                    newRevisitAppointment.getAppointmentId());
+                    revisitAppointment.getAppointmentId());
+
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(revisitAppointment);
 
             // ✅ FIXED: Service handles email sending - don't send email here
             AppointmentDTO newRevisitAppointment = appointmentService.revisitAppointment(appointmentId, newDateTime, revisitRequest.getReason());
 
 
             return ResponseEntity.status(HttpStatus.CREATED).body(newRevisitAppointment);
+
 
         } catch (ResourceNotFoundException e) {
             logger.error("Original appointment not found: {}", appointmentId);
